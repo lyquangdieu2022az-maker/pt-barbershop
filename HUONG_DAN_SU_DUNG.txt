@@ -1,0 +1,34 @@
+HƯỚNG DẪN SỬ DỤNG PT BARBERSHOP POS
+
+1. Mở trên máy tính không cần Internet
+- Giải nén file ZIP.
+- Mở file index.html bằng Chrome, Edge hoặc Cốc Cốc.
+- Đăng nhập Quản Lý:
+  ID: 9939
+  Mật khẩu: 040426
+- Đăng nhập Thu Ngân:
+  ID: 3122
+  Mật khẩu: 152004
+
+2. Mở trên điện thoại
+- Cách dễ nhất: đưa cả thư mục đã giải nén vào điện thoại Android, rồi mở file index.html bằng trình duyệt.
+- Với iPhone, mở trực tiếp file web offline thường bất tiện hơn. Nên mở web qua link HTTPS một lần, bấm Share, chọn Add to Home Screen. Sau lần đầu, app có thể chạy lại từ cache offline.
+
+3. Lưu ý về dữ liệu
+- Dữ liệu giá, dịch vụ, nhân viên, bill và ca làm được lưu riêng trên từng máy/trình duyệt.
+- Nếu copy file web sang máy khác thì giao diện và chức năng vẫn có, nhưng bill/cài đặt trên máy cũ không tự động đi theo.
+- Nếu muốn nhiều máy cùng xem chung bill và chung doanh thu, cần làm bản online có server/database.
+
+4. Quyền tài khoản
+- Quản Lý xem được tất cả bill, kể cả đơn đã hủy, và được sửa bảng giá, % chia, nhân viên.
+- Thu Ngân chỉ thao tác order, in bill, tính tiền, hủy đơn và kết ca.
+- Đơn bị hủy không bị xóa khỏi hệ thống, mà hiện trạng thái Đã hủy để Quản Lý xem lại.
+
+5. Chỉnh giá, dịch vụ, nhân viên
+- Vào tab Bảng giá & % để thêm/sửa giá và % chia nhân viên.
+- Vào tab Nhân viên để thêm nhân viên.
+- Vào tab Đầu ca / Kết ca để nhập tiền đầu ca và chốt ca.
+
+6. Gửi cho người khác
+- Chỉ gửi file ZIP khi bản đã được kiểm tra xong.
+- Người nhận giải nén ZIP trước, sau đó mở index.html.
