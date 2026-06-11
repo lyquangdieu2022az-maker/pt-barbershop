@@ -2,10 +2,6 @@
 
 Bo web order/barbershop POS cho PT Barbershop.
 
-## Tai khoan
-
-- Quan Li: `9939` / `040426`
-- Thu Ngan: `3122` / `152004`
 
 ## Deploy len Render co dong bo online
 
