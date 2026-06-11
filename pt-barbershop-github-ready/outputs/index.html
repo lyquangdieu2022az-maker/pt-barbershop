@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PT Barbershop POS</title>
+    <meta name="theme-color" content="#080b10">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="PT Barbershop">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="apple-touch-icon" href="assets/logo.jpg">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main id="loginScreen" class="login-screen">
+      <section class="login-panel">
+        <div class="login-art" aria-hidden="true">
+          <img src="assets/logo.jpg" alt="">
+          <div>
+            <p class="eyebrow">Barbershop cao cấp</p>
+            <h1>PT Barbershop</h1>
+            <p class="login-copy">Order, bill, chia doanh thu và kết ca trong một màn hình gọn gàng.</p>
+          </div>
+        </div>
+        <form id="loginForm" class="login-form">
+          <div class="login-title">
+            <p class="eyebrow">Đăng nhập hệ thống</p>
+            <h2>Nhập tài khoản</h2>
+          </div>
+          <label>
+            ID
+            <input id="loginId" inputmode="numeric" autocomplete="username" placeholder="Nhập ID">
+          </label>
+          <label>
+            Mật khẩu
+            <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Nhập mật khẩu">
+          </label>
+          <button type="submit" class="primary-button">Đăng nhập</button>
+          <p id="loginError" class="form-error" role="alert"></p>
+        </form>
+      </section>
+    </main>
+
+    <main id="appScreen" class="app-shell is-hidden">
+      <aside class="sidebar">
+        <div class="shop-mark">
+          <img src="assets/logo.jpg" alt="">
+          <div>
+            <strong>PT Barbershop</strong>
+            <span id="sessionLabel">Chưa đăng nhập</span>
+          </div>
+        </div>
+        <div id="roleBadge" class="role-badge">Guest</div>
+        <nav class="nav-tabs" aria-label="Dieu huong">
+          <button class="tab-button is-active" data-tab="order">Order & Bill</button>
+          <button class="tab-button" data-tab="catalog" data-manager-only>Bảng giá & %</button>
+          <button class="tab-button" data-tab="staff" data-manager-only>Nhân viên</button>
+          <button class="tab-button" data-tab="shift">Đầu ca / Kết ca</button>
+        </nav>
+        <button id="logoutBtn" class="ghost-button sidebar-logout">Đăng xuất</button>
+      </aside>
+
+      <section class="main-content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Ngày làm việc</p>
+            <h2 id="todayLabel">Order</h2>
+          </div>
+          <div class="status-grid">
+            <div class="status-pill">
+              <span>Ca hiện tại</span>
+              <strong id="shiftStatus">Chưa mở ca</strong>
+            </div>
+            <div class="status-pill">
+              <span>Tiền dự kiến</span>
+              <strong id="cashStatus">0 VND</strong>
+            </div>
+          </div>
+        </header>
+
+        <section id="tab-order" class="tab-panel">
+          <div class="order-grid">
+            <section class="panel order-info-panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Tạo bill</p>
+                  <h3>Thông tin khách</h3>
+                </div>
+                <button id="resetOrderBtn" class="ghost-button" title="Làm mới bill" aria-label="Làm mới bill">Làm mới</button>
+              </div>
+              <div class="field-grid">
+                <label>Tên khách
+                  <input id="customerName" placeholder="Khách lẻ">
+                </label>
+                <label>Nhân viên cắt/làm
+                  <select id="orderStaff"></select>
+                </label>
+                <label>Ghi chú
+                  <input id="orderNote" placeholder="Ví dụ: yêu cầu nhẹ tay">
+                </label>
+              </div>
+            </section>
+
+            <section class="panel service-picker">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Menu dịch vụ</p>
+                  <h3>Cắt, uốn, nhuộm và chăm sóc</h3>
+                </div>
+              </div>
+              <div id="serviceGroups" class="service-groups"></div>
+            </section>
+
+            <section class="panel bill-panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Hóa đơn</p>
+                  <h3>Bill hiện tại</h3>
+                </div>
+                <button id="printBillBtn" class="ghost-button">In bill</button>
+              </div>
+              <div id="billPreview" class="bill-preview"></div>
+              <div class="bill-actions">
+                <button id="cancelCurrentBillBtn" class="ghost-button danger-button">Hủy bill</button>
+                <button id="saveBillBtn" class="primary-button">Tính tiền / Lưu bill</button>
+              </div>
+            </section>
+          </div>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Lịch sử bill</p>
+                <h3 id="historyTitle">Bill trong ca</h3>
+              </div>
+              <span id="historyScope" class="scope-badge">Đơn hủy vẫn được lưu</span>
+            </div>
+            <div class="table-wrap history-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Giờ</th>
+                    <th>Khách</th>
+                    <th>Nhân viên</th>
+                    <th>Dịch vụ</th>
+                    <th>Trạng thái</th>
+                    <th>Tổng</th>
+                    <th data-manager-only>Chia NV</th>
+                    <th>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody id="billHistory"></tbody>
+              </table>
+            </div>
+            <div id="billCards" class="bill-cards"></div>
+          </section>
+        </section>
+
+        <section id="tab-catalog" class="tab-panel is-hidden" data-manager-only>
+          <div class="two-col">
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Quản lý</p>
+                  <h3>Giá và phần trăm chia</h3>
+                </div>
+              </div>
+              <form id="serviceForm" class="stack-form">
+                <input id="serviceId" type="hidden">
+                <label>Loại
+                  <select id="serviceCategory">
+                    <option value="cut">Cắt</option>
+                    <option value="perm">Uốn</option>
+                    <option value="color">Nhuộm</option>
+                    <option value="extra">Dịch vụ</option>
+                  </select>
+                </label>
+                <label>Tên dịch vụ
+                  <input id="serviceName" placeholder="Ví dụ: player, phồng, hồng phấn">
+                </label>
+                <label>Gia
+                  <input id="servicePrice" type="number" min="0" step="1000" placeholder="80000">
+                </label>
+                <label>% chia cho nhân viên
+                  <input id="serviceCommission" type="number" min="0" max="100" step="1" placeholder="30">
+                </label>
+                <button type="submit" class="primary-button">Lưu dịch vụ</button>
+              </form>
+            </section>
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Bảng giá</p>
+                  <h3>Quản lý từng dịch vụ</h3>
+                </div>
+              </div>
+              <div id="catalogList" class="catalog-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="tab-staff" class="tab-panel is-hidden" data-manager-only>
+          <div class="two-col">
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Nhân sự</p>
+                  <h3>Thêm nhân viên</h3>
+                </div>
+              </div>
+              <form id="staffForm" class="stack-form">
+                <label>Tên nhân viên
+                  <input id="staffName" placeholder="Nhân viên A">
+                </label>
+                <button type="submit" class="primary-button">Thêm nhân viên</button>
+              </form>
+            </section>
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Danh sách</p>
+                  <h3>Nhân viên cắt/làm</h3>
+                </div>
+              </div>
+              <div id="staffList" class="staff-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="tab-shift" class="tab-panel is-hidden">
+          <div class="two-col">
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Đầu ca</p>
+                  <h3>Mở ca thu ngân</h3>
+                </div>
+              </div>
+              <form id="openShiftForm" class="stack-form">
+                <label>Tiền đầu ca
+                  <input id="openingCash" type="number" min="0" step="1000" placeholder="0">
+                </label>
+                <button type="submit" class="primary-button">Nhập đầu ca</button>
+              </form>
+              <form id="closeShiftForm" class="stack-form divider">
+                <label>Tiền thực tế kết ca
+                  <input id="closingCash" type="number" min="0" step="1000" placeholder="0">
+                </label>
+                <button type="submit" class="primary-button">Kết ca</button>
+              </form>
+            </section>
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Báo cáo ca</p>
+                  <h3>Tổng kết rõ ràng</h3>
+                </div>
+              </div>
+              <div id="shiftSummary" class="summary-list"></div>
+            </section>
+          </div>
+          <section class="panel" data-manager-only>
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Quản lý ca</p>
+                <h3>Lịch sử kết ca</h3>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Người trực</th>
+                    <th>Mở ca</th>
+                    <th>Kết ca</th>
+                    <th>Đầu ca</th>
+                    <th>Doanh thu</th>
+                    <th>Đơn hủy</th>
+                    <th>Dự kiến</th>
+                    <th>Thực tế</th>
+                    <th>Chênh lệch</th>
+                  </tr>
+                </thead>
+                <tbody id="shiftLogBody"></tbody>
+              </table>
+            </div>
+          </section>
+          <section class="panel" data-manager-only>
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Sao l&#432;u</p>
+                <h3>&#272;&#7893;i m&#225;y kh&#244;ng m&#7845;t d&#7919; li&#7879;u</h3>
+              </div>
+            </div>
+            <div class="backup-panel">
+              <div id="backupInfo" class="summary-list"></div>
+              <div class="backup-actions">
+                <button id="downloadBackupBtn" class="primary-button" type="button">T&#7843;i file sao l&#432;u</button>
+                <button id="chooseBackupBtn" class="ghost-button" type="button">Nh&#7853;p file sao l&#432;u</button>
+                <input id="backupFileInput" class="is-hidden" type="file" accept="application/json,.json">
+              </div>
+              <p id="backupStatus" class="backup-status">N&#234;n sao l&#432;u sau m&#7895;i ng&#224;y l&#224;m vi&#7879;c ho&#7863;c tr&#432;&#7899;c khi &#273;&#7893;i m&#225;y.</p>
+            </div>
+          </section>
+        </section>
+      </section>
+    </main>
+
+    <section id="printArea" class="print-area" aria-hidden="true"></section>
+
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: pt-barbershop-pos
+    runtime: static
+    buildCommand: echo "No build needed"
+    staticPublishPath: ./outputs
+    branch: main
+    autoDeploy: true
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

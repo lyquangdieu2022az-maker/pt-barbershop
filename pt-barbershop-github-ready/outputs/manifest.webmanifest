@@ -1,0 +1,18 @@
+{
+  "name": "PT Barbershop POS",
+  "short_name": "PT Barber",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f6fb",
+  "theme_color": "#080b10",
+  "description": "Order barbershop, tạo bill, quản lý ca, hủy đơn và chia phần trăm nhân viên.",
+  "icons": [
+    {
+      "src": "assets/logo.jpg",
+      "sizes": "1080x934",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}

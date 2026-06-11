@@ -1,0 +1,35 @@
+HUONG DAN DUA PT BARBERSHOP POS LEN HOSTING RENDER
+
+Trang web nay la static web nen phu hop voi Render Static Site.
+
+Luu y quan trong:
+- Hosting giup co link online de mo tren iPhone, may tinh, iPad.
+- Du lieu hien tai dang luu bang localStorage tren tung thiet bi/trinh duyet.
+- Da co nut sao luu/khoi phuc trong tai khoan Quan Li de doi may khong mat du lieu.
+- Neu muon nhieu may dung chung 1 kho du lieu thi can nang cap them backend + database.
+
+Tai khoan dang nhap trong web:
+- Quan Li: ID 9939 / mat khau 040426
+- Thu Ngan: ID 3122 / mat khau 152004
+
+Cach dua len Render:
+1. Tao tai khoan hoac dang nhap Render: https://dashboard.render.com/
+2. Dua thu muc du an nay len GitHub/GitLab/Bitbucket.
+3. Trong Render, chon New + -> Blueprint.
+4. Chon repo vua day len.
+5. Render se doc file render.yaml trong thu muc goc.
+6. Bam Apply de deploy.
+
+Cau hinh da chuan bi san:
+- Service name: pt-barbershop-pos
+- Runtime: static
+- Publish path: ./outputs
+- Khong can build phuc tap.
+
+Sau khi deploy xong, Render se cap link dang:
+https://pt-barbershop-pos.onrender.com
+
+Neu can cach nhanh hon ma khong tao repo:
+- Vao Netlify Drop: https://app.netlify.com/drop
+- Keo tha thu muc outputs hoac file zip outputs/barbershop-order-offline.zip
+- Netlify se tao link tam/thuc tuy theo tai khoan dang nhap.
