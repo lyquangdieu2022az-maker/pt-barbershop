@@ -2,6 +2,10 @@
 
 Bo web order/barbershop POS cho PT Barbershop.
 
+## Tai khoan
+
+- Quan Li: `9939` / `040426`
+- Thu Ngan: `3122` / `152004`
 
 ## Deploy len Render co dong bo online
 
@@ -52,3 +56,9 @@ Neu dau trang hien `Dong bo: Luu tren may nay`, backend/database chua ket noi ne
 - Lich su bill co o tim So HD.
 - Khi huy bill da luu phai nhap ly do.
 - Thu Ngan khong xem duoc chi tiet huy bill; chi Quan Li moi xem duoc.
+
+## Ket ca
+
+- Nut `Ket ca` se chot ca va dua doanh thu ca hien tai ve 0.
+- Nut `In ket ca` se chot ca, in phieu ket ca, roi dua doanh thu ca hien tai ve 0.
+- Neu da chot ca truoc do, `In ket ca` se in lai ca vua ket gan nhat.
