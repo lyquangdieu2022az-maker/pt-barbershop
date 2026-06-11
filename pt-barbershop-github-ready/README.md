@@ -7,11 +7,11 @@ Bo web order/barbershop POS cho PT Barbershop.
 - Quan Li: `9939` / `040426`
 - Thu Ngan: `3122` / `152004`
 
-## Deploy len Render
+## Deploy len Render co dong bo online
 
-Nen chon 1 trong 2 cach:
+Ban dong bo online can Render Web Service + Postgres. Nen dung Blueprint.
 
-### Cach 1: Blueprint
+### Cach dung: Blueprint
 
 1. Day toan bo thu muc nay len GitHub.
 2. Vao Render.
@@ -19,23 +19,26 @@ Nen chon 1 trong 2 cach:
 4. Chon repo GitHub vua tao.
 5. Bam `Apply`.
 
-Render se doc file `render.yaml` san co.
+Render se doc file `render.yaml` san co va tao:
 
-### Cach 2: Static Site
+- Web Service: `pt-barbershop-pos`
+- Database: `pt-barbershop-db`
 
-Neu Render khong dung Blueprint, chon `New +` -> `Static Site`, roi nhap:
+Khong chon `Static Site` neu muon may tinh/iPhone tu dong dong bo.
 
-- Name: `pt-barbershop-pos`
-- Branch: `main`
-- Root Directory: de trong
-- Build Command: `echo "No build needed"`
-- Publish Directory: `outputs`
+## Neu can nhap thu cong tren Render
 
-Khong chon `New Web Service` cho bo nay.
+Chon `New +` -> `Web Service`:
+
+- Runtime: `Node`
+- Build Command: `npm install`
+- Start Command: `npm start`
+
+Sau do tao Postgres tren Render va gan bien moi truong `DATABASE_URL` cho Web Service.
 
 ## Sao luu du lieu
 
-Du lieu luu tren trinh duyet cua tung may. Khi doi may:
+Khi deploy dung voi database, du lieu luu online va cac may se thay chung. Van nen sao luu dinh ky:
 
 1. Dang nhap Quan Li.
 2. Vao `Dau ca / Ket ca`.
@@ -44,9 +47,7 @@ Du lieu luu tren trinh duyet cua tung may. Khi doi may:
 5. Vao `Dau ca / Ket ca`.
 6. Bam `Nhap file sao luu`.
 
-Neu may tinh da setup nhan vien/bang gia/dau ca ma dien thoai vao van nhu ban dau, do la vi du lieu static dang luu rieng theo tung thiet bi. Hay tai file sao luu tren may tinh roi nhap file sao luu tren dien thoai.
-
-Neu muon nhieu may cung dung chung 1 du lieu theo thoi gian thuc thi can nang cap them backend/database.
+Neu dau trang hien `Dong bo: Luu tren may nay`, backend/database chua ket noi nen du lieu tam thoi chi nam tren may do.
 
 ## Hoa don
 

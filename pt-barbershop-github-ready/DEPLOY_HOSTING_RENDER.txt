@@ -1,36 +1,40 @@
-HUONG DAN DUA PT BARBERSHOP POS LEN HOSTING RENDER
+HUONG DAN DUA PT BARBERSHOP POS LEN RENDER CO DONG BO ONLINE
 
-Trang web nay la static web nen phu hop voi Render Static Site.
+Ban moi co server/database de may tinh va iPhone dung chung du lieu.
 
 Luu y quan trong:
-- Hosting giup co link online de mo tren iPhone, may tinh, iPad.
-- Du lieu hien tai dang luu bang localStorage tren tung thiet bi/trinh duyet.
-- Da co nut sao luu/khoi phuc trong tai khoan Quan Li de doi may khong mat du lieu.
-- Neu may tinh da setup xong ma dien thoai khong thay, hay tai file sao luu tren may tinh va nhap file do tren dien thoai.
-- Neu muon nhieu may dung chung 1 kho du lieu thi can nang cap them backend + database.
+- Muon dong bo that thi phai deploy bang Render Blueprint de tao Web Service + Postgres.
+- Khong chon Static Site cho ban dong bo online.
+- Khi deploy dung, may tinh tao bill thi iPhone se thay, iPhone huy bill thi may tinh se cap nhat.
+- Neu database bi tat/chua cau hinh, web van luu tam tren may do va hien trang thai "Luu tren may nay".
+- Van nen dung nut Tai file sao luu dinh ky de phong truong hop can khoi phuc.
 
 Tai khoan dang nhap trong web:
 - Quan Li: ID 9939 / mat khau 040426
 - Thu Ngan: ID 3122 / mat khau 152004
 
-Cach dua len Render:
+Cach dua len Render dung cach:
 1. Tao tai khoan hoac dang nhap Render: https://dashboard.render.com/
 2. Dua thu muc du an nay len GitHub/GitLab/Bitbucket.
 3. Trong Render, chon New + -> Blueprint.
 4. Chon repo vua day len.
 5. Render se doc file render.yaml trong thu muc goc.
-6. Bam Apply de deploy.
+6. Render se tao 2 thu:
+   - Web Service: pt-barbershop-pos
+   - Postgres database: pt-barbershop-db
+7. Bam Apply de deploy.
 
 Cau hinh da chuan bi san:
 - Service name: pt-barbershop-pos
-- Runtime: static
-- Publish path: ./outputs
-- Khong can build phuc tap.
+- Runtime: node
+- Build command: npm install
+- Start command: npm start
+- Database: pt-barbershop-db
 
 Sau khi deploy xong, Render se cap link dang:
 https://pt-barbershop-pos.onrender.com
 
-Neu can cach nhanh hon ma khong tao repo:
-- Vao Netlify Drop: https://app.netlify.com/drop
-- Keo tha thu muc outputs hoac file zip outputs/barbershop-order-offline.zip
-- Netlify se tao link tam/thuc tuy theo tai khoan dang nhap.
+Neu ban deploy bang Static Site hoac Netlify:
+- Web van mo duoc.
+- Nhung khong co database online.
+- May tinh va iPhone se khong tu dong dong bo.

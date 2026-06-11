@@ -26,9 +26,10 @@ HUONG DAN SU DUNG PT BARBERSHOP POS
 - Neu may tinh da setup nhan vien/bang gia/dau ca ma dien thoai vao van nhu ban dau, do la vi du lieu dang luu rieng theo tung thiet bi. Hay tai file sao luu o may tinh roi nhap file sao luu tren dien thoai.
 
 5. Luu y ve du lieu
-- Neu chi dung ban static/offline, du lieu moi may se luu rieng theo trinh duyet.
-- Neu xoa du lieu trinh duyet, doi dien thoai, doi may tinh ma khong co file sao luu thi du lieu cu co the mat.
-- Neu muon nhieu may cung xem chung bill va doanh thu theo thoi gian thuc, can nang cap them server/database.
+- Neu deploy bang Render Blueprint co database, may tinh va dien thoai se dung chung du lieu online.
+- Khi dong bo online hoat dong, dau trang se hien Dong bo: Online.
+- Neu dong bo hien "Luu tren may nay", nghia la backend/database chua ket noi hoac dang mat mang. Luc do du lieu chi luu tam tren thiet bi dang dung.
+- Van nen tai file sao luu dinh ky de phong truong hop can khoi phuc.
 
 6. Quyen tai khoan
 - Quan Li xem duoc tat ca bill, don da huy, bang gia, % chia, nhan vien, lich su ket ca va sao luu du lieu.

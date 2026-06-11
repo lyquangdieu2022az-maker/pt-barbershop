@@ -1,5 +1,6 @@
 const STORE_KEY = "barbershop-order-v1";
 const BACKUP_VERSION = 1;
+const SYNC_INTERVAL_MS = 2500;
 
 const USERS = [
   { id: "9939", password: "040426", role: "manager", name: "Quản Lý" },
@@ -49,6 +50,13 @@ const defaultState = {
 };
 
 let state = loadState();
+let cloudStarted = false;
+let cloudBooting = false;
+let cloudSaveTimer = null;
+let cloudPendingSave = false;
+let applyingRemoteState = false;
+let lastRemoteUpdatedAt = "";
+let syncOnline = false;
 
 const $ = (selector) => document.querySelector(selector);
 const money = (value) => new Intl.NumberFormat("vi-VN").format(Number(value || 0)) + " VND";
@@ -163,6 +171,136 @@ function normalizeState(nextState) {
 
 function saveState() {
   localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  if (cloudStarted && isLoggedIn() && !applyingRemoteState) {
+    scheduleCloudSave();
+  }
+}
+
+function businessState() {
+  return {
+    invoiceCounter: state.invoiceCounter,
+    staff: state.staff,
+    services: state.services,
+    bills: state.bills,
+    shift: state.shift,
+    shiftLogs: state.shiftLogs
+  };
+}
+
+function hasBusinessData(data = businessState()) {
+  return Boolean(
+    Number(data.invoiceCounter || 0) ||
+    (Array.isArray(data.bills) && data.bills.length) ||
+    (Array.isArray(data.shiftLogs) && data.shiftLogs.length) ||
+    data.shift?.isOpen ||
+    Number(data.shift?.openingCash || 0) ||
+    (Array.isArray(data.staff) && data.staff.length !== defaultState.staff.length) ||
+    (Array.isArray(data.services) && data.services.length !== defaultState.services.length)
+  );
+}
+
+function applyBusinessState(data) {
+  const currentSession = state.session;
+  const currentSelected = state.selectedServiceIds;
+  applyingRemoteState = true;
+  state = normalizeState({
+    ...structuredClone(defaultState),
+    ...data,
+    session: currentSession,
+    loggedIn: Boolean(currentSession),
+    selectedServiceIds: currentSelected
+  });
+  saveState();
+  applyingRemoteState = false;
+  renderAll();
+}
+
+function syncHeaders() {
+  const user = USERS.find((item) => item.id === state.session?.id);
+  const headers = { "Content-Type": "application/json" };
+  if (user) {
+    headers["X-PT-User"] = user.id;
+    headers["X-PT-Password"] = user.password;
+  }
+  return headers;
+}
+
+function setSyncStatus(text, online = false) {
+  syncOnline = online;
+  const element = $("#syncStatus");
+  if (element) element.textContent = text;
+}
+
+async function fetchCloudState() {
+  const response = await fetch("/api/state", { headers: syncHeaders(), cache: "no-store" });
+  if (!response.ok) throw new Error("Sync fetch failed");
+  return response.json();
+}
+
+async function pushCloudState() {
+  const response = await fetch("/api/state", {
+    method: "POST",
+    headers: syncHeaders(),
+    body: JSON.stringify({ data: businessState() })
+  });
+  if (!response.ok) throw new Error("Sync save failed");
+  const payload = await response.json();
+  lastRemoteUpdatedAt = payload.updatedAt || lastRemoteUpdatedAt;
+  setSyncStatus("Online", true);
+}
+
+async function pullCloudState() {
+  if (!isLoggedIn()) return;
+  const payload = await fetchCloudState();
+  if (!payload.data) {
+    if (hasBusinessData()) {
+      await pushCloudState();
+    } else {
+      setSyncStatus("Online", true);
+    }
+    return;
+  }
+  if (payload.updatedAt && payload.updatedAt !== lastRemoteUpdatedAt) {
+    lastRemoteUpdatedAt = payload.updatedAt;
+    applyBusinessState(payload.data);
+  }
+  setSyncStatus("Online", true);
+}
+
+function scheduleCloudSave() {
+  cloudPendingSave = true;
+  if (cloudBooting) return;
+  clearTimeout(cloudSaveTimer);
+  cloudSaveTimer = setTimeout(async () => {
+    cloudPendingSave = false;
+    try {
+      await pushCloudState();
+    } catch {
+      setSyncStatus("Lưu trên máy này", false);
+    }
+  }, 500);
+}
+
+async function startCloudSync() {
+  if (!isLoggedIn()) {
+    setSyncStatus("Chưa đăng nhập", false);
+    return;
+  }
+  cloudStarted = true;
+  cloudBooting = true;
+  setSyncStatus("Đang đồng bộ", false);
+  try {
+    await pullCloudState();
+    cloudBooting = false;
+    if (cloudPendingSave) scheduleCloudSave();
+    clearInterval(window.__ptSyncInterval);
+    window.__ptSyncInterval = setInterval(() => {
+      pullCloudState().catch(() => setSyncStatus("Lưu trên máy này", false));
+    }, SYNC_INTERVAL_MS);
+  } catch {
+    cloudBooting = false;
+    setSyncStatus("Lưu trên máy này", false);
+  }
 }
 
 function dataForBackup() {
@@ -887,16 +1025,20 @@ $("#loginForm").addEventListener("submit", (event) => {
     saveState();
     renderAll();
     setActiveTab("order");
+    startCloudSync();
     return;
   }
   $("#loginError").textContent = "Sai ID hoặc mật khẩu.";
 });
 
 $("#logoutBtn").addEventListener("click", () => {
+  clearInterval(window.__ptSyncInterval);
+  cloudStarted = false;
   state.session = null;
   state.loggedIn = false;
   saveState();
   renderAll();
+  setSyncStatus("Chưa đăng nhập", false);
 });
 
 document.querySelectorAll(".tab-button").forEach((button) => {
@@ -1053,6 +1195,7 @@ $("#printBillBtn").addEventListener("click", printCurrentBill);
 $("#billSearch").addEventListener("input", renderBillHistory);
 
 renderAll();
+startCloudSync();
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
