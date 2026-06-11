@@ -1,0 +1,40 @@
+HUONG DAN DUA PT BARBERSHOP POS LEN RENDER CO DONG BO ONLINE
+
+Ban moi co server/database de may tinh va iPhone dung chung du lieu.
+
+Luu y quan trong:
+- Muon dong bo that thi phai deploy bang Render Blueprint de tao Web Service + Postgres.
+- Khong chon Static Site cho ban dong bo online.
+- Khi deploy dung, may tinh tao bill thi iPhone se thay, iPhone huy bill thi may tinh se cap nhat.
+- Neu database bi tat/chua cau hinh, web van luu tam tren may do va hien trang thai "Luu tren may nay".
+- Van nen dung nut Tai file sao luu dinh ky de phong truong hop can khoi phuc.
+
+Tai khoan dang nhap trong web:
+- Quan Li: ID 9939 / mat khau 040426
+- Thu Ngan: ID 3122 / mat khau 152004
+
+Cach dua len Render dung cach:
+1. Tao tai khoan hoac dang nhap Render: https://dashboard.render.com/
+2. Dua thu muc du an nay len GitHub/GitLab/Bitbucket.
+3. Trong Render, chon New + -> Blueprint.
+4. Chon repo vua day len.
+5. Render se doc file render.yaml trong thu muc goc.
+6. Render se tao 2 thu:
+   - Web Service: pt-barbershop-pos
+   - Postgres database: pt-barbershop-db
+7. Bam Apply de deploy.
+
+Cau hinh da chuan bi san:
+- Service name: pt-barbershop-pos
+- Runtime: node
+- Build command: npm install
+- Start command: npm start
+- Database: pt-barbershop-db
+
+Sau khi deploy xong, Render se cap link dang:
+https://pt-barbershop-pos.onrender.com
+
+Neu ban deploy bang Static Site hoac Netlify:
+- Web van mo duoc.
+- Nhung khong co database online.
+- May tinh va iPhone se khong tu dong dong bo.
