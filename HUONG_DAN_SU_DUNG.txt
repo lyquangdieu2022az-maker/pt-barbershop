@@ -3,13 +3,6 @@ HƯỚNG DẪN SỬ DỤNG PT BARBERSHOP POS
 1. Mở trên máy tính không cần Internet
 - Giải nén file ZIP.
 - Mở file index.html bằng Chrome, Edge hoặc Cốc Cốc.
-- Đăng nhập Quản Lý:
-  ID: 9939
-  Mật khẩu: 040426
-- Đăng nhập Thu Ngân:
-  ID: 3122
-  Mật khẩu: 152004
-
 2. Mở trên điện thoại
 - Cách dễ nhất: đưa cả thư mục đã giải nén vào điện thoại Android, rồi mở file index.html bằng trình duyệt.
 - Với iPhone, mở trực tiếp file web offline thường bất tiện hơn. Nên mở web qua link HTTPS một lần, bấm Share, chọn Add to Home Screen. Sau lần đầu, app có thể chạy lại từ cache offline.
