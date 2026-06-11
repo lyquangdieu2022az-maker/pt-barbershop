@@ -23,6 +23,7 @@ HUONG DAN SU DUNG PT BARBERSHOP POS
 - Bam Tai file sao luu de lay file JSON.
 - Khi qua may moi, mo web, dang nhap Quan Li, vao Dau ca / Ket ca, bam Nhap file sao luu.
 - File sao luu chua bang gia, nhan vien, bill, don huy, ca dang lam va lich su ket ca.
+- Neu may tinh da setup nhan vien/bang gia/dau ca ma dien thoai vao van nhu ban dau, do la vi du lieu dang luu rieng theo tung thiet bi. Hay tai file sao luu o may tinh roi nhap file sao luu tren dien thoai.
 
 5. Luu y ve du lieu
 - Neu chi dung ban static/offline, du lieu moi may se luu rieng theo trinh duyet.
@@ -33,12 +34,19 @@ HUONG DAN SU DUNG PT BARBERSHOP POS
 - Quan Li xem duoc tat ca bill, don da huy, bang gia, % chia, nhan vien, lich su ket ca va sao luu du lieu.
 - Thu Ngan chi order, in bill, tinh tien, huy don va ket ca.
 - Don bi huy khong bi xoa khoi he thong, ma hien trang thai Da huy de Quan Li xem lai.
+- Khi huy don da luu, nguoi huy bat buoc nhap ly do.
+- Thu Ngan khong xem duoc ly do/chi tiet huy don. Chi Quan Li moi xem duoc chi tiet huy don.
 
 7. Chinh gia, dich vu, nhan vien
 - Vao tab Bang gia & % de them/sua gia va % chia nhan vien.
 - Vao tab Nhan vien de them nhan vien.
 - Vao tab Dau ca / Ket ca de nhap tien dau ca, chot ca va sao luu du lieu.
 
-8. Gui cho nguoi khac
+8. So hoa don va so thu tu
+- Moi bill da luu se co So HD dang HD000001, HD000002...
+- STT cho la so thu tu khach doi cat trong ca hien tai.
+- O Lich su bill co the tim bang So HD, vi du HD000001.
+
+9. Gui cho nguoi khac
 - Chi gui file ZIP khi ban da kiem tra xong.
 - Nguoi nhan giai nen ZIP truoc, sau do mo index.html.

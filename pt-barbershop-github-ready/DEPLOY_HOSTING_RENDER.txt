@@ -6,6 +6,7 @@ Luu y quan trong:
 - Hosting giup co link online de mo tren iPhone, may tinh, iPad.
 - Du lieu hien tai dang luu bang localStorage tren tung thiet bi/trinh duyet.
 - Da co nut sao luu/khoi phuc trong tai khoan Quan Li de doi may khong mat du lieu.
+- Neu may tinh da setup xong ma dien thoai khong thay, hay tai file sao luu tren may tinh va nhap file do tren dien thoai.
 - Neu muon nhieu may dung chung 1 kho du lieu thi can nang cap them backend + database.
 
 Tai khoan dang nhap trong web:

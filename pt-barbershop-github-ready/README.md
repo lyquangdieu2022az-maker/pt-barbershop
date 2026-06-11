@@ -44,4 +44,14 @@ Du lieu luu tren trinh duyet cua tung may. Khi doi may:
 5. Vao `Dau ca / Ket ca`.
 6. Bam `Nhap file sao luu`.
 
+Neu may tinh da setup nhan vien/bang gia/dau ca ma dien thoai vao van nhu ban dau, do la vi du lieu static dang luu rieng theo tung thiet bi. Hay tai file sao luu tren may tinh roi nhap file sao luu tren dien thoai.
+
 Neu muon nhieu may cung dung chung 1 du lieu theo thoi gian thuc thi can nang cap them backend/database.
+
+## Hoa don
+
+- Moi bill da luu co So HD, vi du `HD000001`.
+- STT cho la so thu tu khach doi cat trong ca hien tai.
+- Lich su bill co o tim So HD.
+- Khi huy bill da luu phai nhap ly do.
+- Thu Ngan khong xem duoc chi tiet huy bill; chi Quan Li moi xem duoc.

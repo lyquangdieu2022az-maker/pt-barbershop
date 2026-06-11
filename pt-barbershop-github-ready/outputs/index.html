@@ -121,7 +121,7 @@
               </div>
               <div id="billPreview" class="bill-preview"></div>
               <div class="bill-actions">
-                <button id="cancelCurrentBillBtn" class="ghost-button danger-button">Hủy bill</button>
+                <button id="cancelCurrentBillBtn" class="ghost-button danger-button">X&#243;a d&#7883;ch v&#7909;</button>
                 <button id="saveBillBtn" class="primary-button">Tính tiền / Lưu bill</button>
               </div>
             </section>
@@ -133,12 +133,18 @@
                 <p class="eyebrow">Lịch sử bill</p>
                 <h3 id="historyTitle">Bill trong ca</h3>
               </div>
-              <span id="historyScope" class="scope-badge">Đơn hủy vẫn được lưu</span>
+              <div class="history-tools">
+                <label class="search-field">T&#236;m s&#7889; h&#243;a &#273;&#417;n
+                  <input id="billSearch" placeholder="VD: HD000001">
+                </label>
+                <span id="historyScope" class="scope-badge">Đơn hủy vẫn được lưu</span>
+              </div>
             </div>
             <div class="table-wrap history-table-wrap">
               <table>
                 <thead>
                   <tr>
+                    <th>S&#7889; H&#272; / STT</th>
                     <th>Giờ</th>
                     <th>Khách</th>
                     <th>Nhân viên</th>

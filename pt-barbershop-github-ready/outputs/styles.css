@@ -362,6 +362,22 @@ select:focus {
   margin-bottom: 14px;
 }
 
+.history-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.search-field {
+  width: min(260px, 100%);
+}
+
+.search-field input {
+  min-height: 38px;
+}
+
 .field-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -459,6 +475,25 @@ select:focus {
   gap: 4px;
 }
 
+.bill-number-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.bill-number-strip span {
+  border: 1px solid rgba(15, 95, 184, 0.24);
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 8px 10px;
+  color: var(--muted);
+  font-weight: 850;
+}
+
+.bill-number-strip strong {
+  color: var(--charcoal);
+}
+
 .bill-client span,
 .muted-line {
   color: var(--muted);
@@ -539,7 +574,7 @@ select:focus {
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 900px;
+  min-width: 1060px;
 }
 
 th,
@@ -729,8 +764,12 @@ th {
 
   .status-grid,
   .field-grid,
+  .history-tools,
+  .search-field,
+  .bill-number-strip,
   .nav-tabs {
     grid-template-columns: 1fr;
+    width: 100%;
   }
 
   .service-option {

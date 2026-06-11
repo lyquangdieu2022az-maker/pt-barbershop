@@ -18,6 +18,7 @@ const categoryOrder = ["cut", "perm", "color", "extra"];
 const defaultState = {
   session: null,
   loggedIn: false,
+  invoiceCounter: 0,
   staff: [
     { id: crypto.randomUUID(), name: "Nhân viên A" },
     { id: crypto.randomUUID(), name: "Nhân viên B" }
@@ -41,7 +42,8 @@ const defaultState = {
     closedAt: "",
     cashierName: "",
     openingCash: 0,
-    closingCash: 0
+    closingCash: 0,
+    queueCounter: 0
   },
   shiftLogs: []
 };
@@ -51,6 +53,25 @@ let state = loadState();
 const $ = (selector) => document.querySelector(selector);
 const money = (value) => new Intl.NumberFormat("vi-VN").format(Number(value || 0)) + " VND";
 const timeText = (iso) => iso ? new Date(iso).toLocaleString("vi-VN") : "";
+
+function sequenceFromInvoiceNo(invoiceNo) {
+  const digits = String(invoiceNo || "").match(/\d+/g)?.join("");
+  return digits ? Number(digits) : 0;
+}
+
+function formatInvoiceNo(sequence) {
+  return `HD${String(Number(sequence || 0)).padStart(6, "0")}`;
+}
+
+function nextInvoiceSequence() {
+  state.invoiceCounter = Number(state.invoiceCounter || 0) + 1;
+  return state.invoiceCounter;
+}
+
+function nextQueueNumber() {
+  state.shift.queueCounter = Number(state.shift.queueCounter || 0) + 1;
+  return state.shift.queueCounter;
+}
 
 function loadState() {
   const saved = localStorage.getItem(STORE_KEY);
@@ -66,10 +87,12 @@ function loadState() {
 function normalizeState(nextState) {
   nextState.session = nextState.session?.role ? nextState.session : null;
   nextState.loggedIn = Boolean(nextState.session);
+  nextState.invoiceCounter = Number(nextState.invoiceCounter || 0);
   nextState.staff = Array.isArray(nextState.staff) ? nextState.staff : structuredClone(defaultState.staff);
   nextState.services = Array.isArray(nextState.services) ? nextState.services : structuredClone(defaultState.services);
   nextState.selectedServiceIds = Array.isArray(nextState.selectedServiceIds) ? nextState.selectedServiceIds : [];
   nextState.shift = { ...structuredClone(defaultState.shift), ...(nextState.shift || {}) };
+  nextState.shift.queueCounter = Number(nextState.shift.queueCounter || 0);
   nextState.shiftLogs = Array.isArray(nextState.shiftLogs) ? nextState.shiftLogs.map((shift) => ({
     id: shift.id || crypto.randomUUID(),
     isOpen: false,
@@ -91,21 +114,34 @@ function normalizeState(nextState) {
     nextState.shift.id = "legacy-shift";
   }
 
+  let invoiceCounter = nextState.invoiceCounter;
+  const shiftQueueCounters = new Map();
+
   nextState.bills = Array.isArray(nextState.bills) ? nextState.bills.map((bill) => {
     const items = Array.isArray(bill.items) ? bill.items : [];
     const total = Number(bill.total ?? items.reduce((sum, item) => sum + Number(item.price || 0), 0));
     const commission = Number(bill.commission ?? items.reduce((sum, item) => {
       return sum + Number(item.price || 0) * Number(item.commission || 0) / 100;
     }, 0));
+    const invoiceSequence = Number(bill.invoiceSequence || sequenceFromInvoiceNo(bill.invoiceNo) || 0) || (invoiceCounter + 1);
+    const invoiceNo = bill.invoiceNo || formatInvoiceNo(invoiceSequence);
+    const shiftId = bill.shiftId || nextState.shift.id || "legacy-shift";
+    const queueNo = Number(bill.queueNo || 0) || ((shiftQueueCounters.get(shiftId) || 0) + 1);
+
+    invoiceCounter = Math.max(invoiceCounter, invoiceSequence);
+    shiftQueueCounters.set(shiftId, Math.max(shiftQueueCounters.get(shiftId) || 0, queueNo));
 
     return {
       id: bill.id || crypto.randomUUID(),
       createdAt: bill.createdAt || new Date().toISOString(),
+      invoiceSequence,
+      invoiceNo,
+      queueNo,
       customer: bill.customer || "Khách lẻ",
       staffId: bill.staffId || "",
       staffName: bill.staffName || "Chưa chọn",
       note: bill.note || "",
-      shiftId: bill.shiftId || nextState.shift.id || "legacy-shift",
+      shiftId,
       createdBy: bill.createdBy || "Hệ thống",
       status: bill.status || "paid",
       canceledAt: bill.canceledAt || "",
@@ -117,6 +153,11 @@ function normalizeState(nextState) {
     };
   }) : [];
 
+  nextState.invoiceCounter = Math.max(nextState.invoiceCounter, invoiceCounter);
+  if (nextState.shift.id) {
+    nextState.shift.queueCounter = Math.max(nextState.shift.queueCounter, shiftQueueCounters.get(nextState.shift.id) || 0);
+  }
+
   return nextState;
 }
 
@@ -126,6 +167,7 @@ function saveState() {
 
 function dataForBackup() {
   return {
+    invoiceCounter: state.invoiceCounter,
     staff: state.staff,
     services: state.services,
     bills: state.bills,
@@ -288,6 +330,37 @@ function canCancelBill(bill) {
   return bill.status !== "canceled" && state.shift.isOpen && bill.shiftId === state.shift.id;
 }
 
+function billSearchTerm() {
+  return ($("#billSearch")?.value || "").trim().toLowerCase();
+}
+
+function billMatchesSearch(bill, term) {
+  if (!term) return true;
+  return [
+    bill.invoiceNo,
+    bill.invoiceSequence,
+    bill.queueNo,
+    `#${bill.queueNo}`,
+    bill.customer,
+    bill.staffName
+  ].some((value) => String(value || "").toLowerCase().includes(term));
+}
+
+function billIdentityHtml(bill) {
+  return `
+    <strong>${escapeHtml(bill.invoiceNo || "-")}</strong>
+    <div class="row-meta">STT chờ: #${escapeHtml(bill.queueNo || "-")}</div>
+  `;
+}
+
+function cancelDetailsHtml(bill) {
+  if (!isManager() || bill.status !== "canceled") return "";
+  return `
+    <div class="row-meta">Hủy bởi: ${escapeHtml(bill.canceledBy || "-")} ${timeText(bill.canceledAt) ? `- ${timeText(bill.canceledAt)}` : ""}</div>
+    <div class="row-meta">Lý do: ${escapeHtml(bill.cancelReason || "Không ghi")}</div>
+  `;
+}
+
 function requireLogin() {
   $("#loginScreen").classList.toggle("is-hidden", isLoggedIn());
   $("#appScreen").classList.toggle("is-hidden", !isLoggedIn());
@@ -366,6 +439,8 @@ function renderBillPreview() {
   const staff = staffById($("#orderStaff").value);
   const services = selectedServices();
   const { total, commission } = billTotals(services);
+  const nextInvoiceNo = formatInvoiceNo(Number(state.invoiceCounter || 0) + 1);
+  const nextQueueText = state.shift.isOpen ? `#${Number(state.shift.queueCounter || 0) + 1}` : "Chưa mở ca";
   const customer = $("#customerName").value.trim() || "Khách lẻ";
 
   if (!services.length) {
@@ -374,6 +449,10 @@ function renderBillPreview() {
   }
 
   $("#billPreview").innerHTML = `
+    <div class="bill-number-strip">
+      <span>Số HĐ: <strong>${nextInvoiceNo}</strong></span>
+      <span>STT chờ: <strong>${nextQueueText}</strong></span>
+    </div>
     <div class="bill-client">
       <strong>${escapeHtml(customer)}</strong>
       <span>Nhân viên: ${escapeHtml(staff?.name || "Chưa chọn")}</span>
@@ -433,20 +512,25 @@ function renderStaffList() {
 function renderBillHistory() {
   const body = $("#billHistory");
   const cards = $("#billCards");
-  const bills = visibleBills().slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const term = billSearchTerm();
+  const bills = visibleBills()
+    .filter((bill) => billMatchesSearch(bill, term))
+    .slice()
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   $("#historyTitle").textContent = isManager() ? "Tất cả bill trong hệ thống" : "Bill trong ca hiện tại";
   $("#historyScope").textContent = isManager() ? "Quản lý xem cả đơn thanh toán và đơn hủy" : "Thu ngân chỉ thấy bill của ca này";
 
   if (!bills.length) {
-    body.innerHTML = `<tr><td colspan="${isManager() ? 8 : 7}">Chưa có bill nào.</td></tr>`;
-    cards.innerHTML = `<p class="empty-state">Chưa có bill nào.</p>`;
+    const emptyText = term ? "Không tìm thấy hóa đơn phù hợp." : "Chưa có bill nào.";
+    body.innerHTML = `<tr><td colspan="${isManager() ? 9 : 8}">${emptyText}</td></tr>`;
+    cards.innerHTML = `<p class="empty-state">${emptyText}</p>`;
     return;
   }
 
   body.innerHTML = bills.map((bill) => {
     const canceled = bill.status === "canceled";
     const services = bill.items.map((item) => escapeHtml(item.name)).join(", ");
-    const cancelNote = canceled ? `<div class="row-meta">Lý do: ${escapeHtml(bill.cancelReason || "Không ghi")}</div>` : "";
+    const cancelNote = cancelDetailsHtml(bill);
     const commissionCell = isManager() ? `<td>${canceled ? "0 VND" : money(bill.commission)}</td>` : "";
     const actions = `
       <button class="small-button" data-print-bill="${bill.id}">In lại</button>
@@ -455,6 +539,7 @@ function renderBillHistory() {
 
     return `
       <tr class="${canceled ? "row-canceled" : ""}">
+        <td>${billIdentityHtml(bill)}</td>
         <td>${timeText(bill.createdAt)}</td>
         <td>${escapeHtml(bill.customer)}${cancelNote}</td>
         <td>${escapeHtml(bill.staffName)}</td>
@@ -481,6 +566,7 @@ function renderBillHistory() {
           <div>
             <strong>${escapeHtml(bill.customer)}</strong>
             <div class="bill-card-meta">
+              <span>${escapeHtml(bill.invoiceNo || "-")} - STT #${escapeHtml(bill.queueNo || "-")}</span>
               <span>${timeText(bill.createdAt)}</span>
               <span>Nhân viên: ${escapeHtml(bill.staffName)}</span>
             </div>
@@ -488,7 +574,7 @@ function renderBillHistory() {
           <span class="status ${canceled ? "canceled" : "paid"}">${canceled ? "Đã hủy" : "Đã tính tiền"}</span>
         </div>
         <div>${services}</div>
-        ${canceled ? `<div class="row-meta">Lý do: ${escapeHtml(bill.cancelReason || "Không ghi")}</div>` : ""}
+        ${cancelDetailsHtml(bill)}
         <div class="bill-line">
           <span>Tổng tiền</span>
           <strong>${money(bill.total)}</strong>
@@ -598,6 +684,12 @@ function resetOrder() {
   renderAll();
 }
 
+function clearSelectedServices() {
+  state.selectedServiceIds = [];
+  saveState();
+  renderAll();
+}
+
 function saveBill() {
   const staff = staffById($("#orderStaff").value);
   state.selectedServiceIds = selectedServiceIds();
@@ -617,9 +709,14 @@ function saveBill() {
   }
 
   const { total, commission } = billTotals(services);
+  const invoiceSequence = nextInvoiceSequence();
+  const queueNo = nextQueueNumber();
   state.bills.push({
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
+    invoiceSequence,
+    invoiceNo: formatInvoiceNo(invoiceSequence),
+    queueNo,
     customer: $("#customerName").value.trim() || "Khách lẻ",
     staffId: staff.id,
     staffName: staff.name,
@@ -646,11 +743,18 @@ function saveBill() {
 function cancelBill(billId) {
   const bill = state.bills.find((item) => item.id === billId);
   if (!bill || !canCancelBill(bill)) return;
+  const reason = prompt(`Nhập lý do hủy hóa đơn ${bill.invoiceNo || ""}:`);
+  if (reason === null) return;
+  const cleanReason = reason.trim();
+  if (!cleanReason) {
+    alert("Phải nhập lý do hủy đơn.");
+    return;
+  }
 
   bill.status = "canceled";
   bill.canceledAt = new Date().toISOString();
   bill.canceledBy = state.session.name;
-  bill.cancelReason = `${state.session.name} hủy đơn`;
+  bill.cancelReason = cleanReason;
   saveState();
   renderAll();
 }
@@ -665,6 +769,8 @@ function printCurrentBill() {
   const { total } = billTotals(services);
   printBill({
     createdAt: new Date().toISOString(),
+    invoiceNo: formatInvoiceNo(Number(state.invoiceCounter || 0) + 1),
+    queueNo: state.shift.isOpen ? Number(state.shift.queueCounter || 0) + 1 : "",
     customer: $("#customerName").value.trim() || "Khách lẻ",
     staffName: staff?.name || "Chưa chọn",
     items: services,
@@ -684,10 +790,13 @@ function printBill(bill) {
     <div class="receipt">
       <h1>PT Barbershop</h1>
       <p>Hóa đơn dịch vụ</p>
+      <div class="receipt-row"><span>Số HĐ</span><strong>${escapeHtml(bill.invoiceNo || "-")}</strong></div>
+      <div class="receipt-row"><span>STT chờ</span><strong>${bill.queueNo ? `#${escapeHtml(bill.queueNo)}` : "-"}</strong></div>
       <div class="receipt-row"><span>Thời gian</span><strong>${timeText(bill.createdAt)}</strong></div>
       <div class="receipt-row"><span>Khách</span><strong>${escapeHtml(bill.customer)}</strong></div>
       <div class="receipt-row"><span>Nhân viên</span><strong>${escapeHtml(bill.staffName)}</strong></div>
       ${bill.status === "canceled" ? `<div class="receipt-status">Đơn đã hủy</div>` : ""}
+      ${bill.status === "canceled" && isManager() ? `<div class="receipt-row"><span>Lý do hủy</span><strong>${escapeHtml(bill.cancelReason || "Không ghi")}</strong></div>` : ""}
       <hr>
       ${bill.items.map((item) => `
         <div class="receipt-row">
@@ -715,7 +824,8 @@ function openShift() {
     closedAt: "",
     cashierName: state.session.name,
     openingCash: Number($("#openingCash").value || 0),
-    closingCash: 0
+    closingCash: 0,
+    queueCounter: 0
   };
   state.selectedServiceIds = [];
   saveState();
@@ -937,9 +1047,10 @@ $("#backupFileInput").addEventListener("change", (event) => {
 });
 
 $("#resetOrderBtn").addEventListener("click", resetOrder);
-$("#cancelCurrentBillBtn").addEventListener("click", resetOrder);
+$("#cancelCurrentBillBtn").addEventListener("click", clearSelectedServices);
 $("#saveBillBtn").addEventListener("click", saveBill);
 $("#printBillBtn").addEventListener("click", printCurrentBill);
+$("#billSearch").addEventListener("input", renderBillHistory);
 
 renderAll();
 
