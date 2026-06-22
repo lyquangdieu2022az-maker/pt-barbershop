@@ -74,6 +74,12 @@ let pendingManagerApproval = null;
 const $ = (selector) => document.querySelector(selector);
 const money = (value) => new Intl.NumberFormat("vi-VN").format(Number(value || 0)) + " VND";
 const timeText = (iso) => iso ? new Date(iso).toLocaleString("vi-VN") : "";
+const receiptTimeText = (iso) => iso ? new Date(iso).toLocaleString("vi-VN", {
+  day: "2-digit",
+  month: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit"
+}) : "";
 
 function sequenceFromInvoiceNo(invoiceNo) {
   const digits = String(invoiceNo || "").match(/\d+/g)?.join("");
@@ -1186,7 +1192,7 @@ function printBill(bill) {
       <p>Hóa đơn dịch vụ</p>
       <div class="receipt-row"><span>Số HĐ</span><strong>${escapeHtml(bill.invoiceNo || "-")}</strong></div>
       <div class="receipt-row"><span>STT chờ</span><strong>${bill.queueNo ? `#${escapeHtml(bill.queueNo)}` : "-"}</strong></div>
-      <div class="receipt-row"><span>Thời gian</span><strong>${timeText(bill.createdAt)}</strong></div>
+      <div class="receipt-row"><span>Thời gian</span><strong>${receiptTimeText(bill.createdAt)}</strong></div>
       <div class="receipt-row"><span>Khách</span><strong>${escapeHtml(bill.customer)}</strong></div>
       ${bill.phone ? `<div class="receipt-row"><span>SĐT</span><strong>${escapeHtml(bill.phone)}</strong></div>` : ""}
       <div class="receipt-row"><span>Nhân viên</span><strong>${escapeHtml(bill.staffName)}</strong></div>
