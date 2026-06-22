@@ -4,7 +4,7 @@ Bo web order/barbershop POS cho PT Barbershop.
 
 ## Tai khoan
 
-- Quan Li: `9939` / `040426`
+- Admin: `9939` / `040426`
 - Thu Ngan: `3122` / `152004`
 
 ## Deploy len Render co dong bo online
@@ -49,21 +49,22 @@ Sau do tao Postgres tren Render va gan bien moi truong `DATABASE_URL` cho Web Se
 
 Khi deploy dung voi database, du lieu luu online va cac may se thay chung. Van nen sao luu dinh ky:
 
-1. Dang nhap Quan Li.
+1. Dang nhap Admin hoac Quan Li.
 2. Vao `Dau ca / Ket ca`.
 3. Bam `Tai file sao luu`.
-4. Qua may moi, mo web va dang nhap Quan Li.
+4. Qua may moi, mo web va dang nhap Admin hoac Quan Li.
 5. Vao `Dau ca / Ket ca`.
 6. Bam `Nhap file sao luu`.
 
 Neu dau trang hien `Dong bo: Luu tren may nay`, backend/database chua ket noi nen du lieu tam thoi chi nam tren may do.
 
-## Tao nhieu bo tai khoan rieng
+## Admin quan ly tai khoan
 
-- Dang nhap Quan Li.
+- Dang nhap Admin bang `9939` / `040426`.
 - Vao tab `Tai khoan`.
-- Nhap ten bo/chi nhanh, ID va mat khau Quan Li, ID va mat khau Thu Ngan.
-- Bam `Tao bo tai khoan`.
+- Co the tim theo ID, ten bo/chi nhanh hoac vai tro.
+- Co the tao bo tai khoan moi, sua ID/mat khau va xoa bo tai khoan khac.
+- Khong xoa duoc bo tai khoan dang dang nhap.
 - Moi bo tai khoan co bill, doanh thu, dau ca/ket ca va nhan vien rieng.
 - Bo 1 va bo 2 khong anh huong doanh thu cua nhau.
 - Khi dung Render Web Service + Postgres, ID vua tao co the dang nhap tren may tinh/iPhone khac.

@@ -7,7 +7,7 @@ const API_BASE_URL = String(window.PT_API_BASE_URL || "").replace(/\/+$/, "");
 const DEFAULT_WORKSPACE_ID = "pt-main";
 
 const USERS = [
-  { id: "9939", password: "040426", role: "manager", name: "Quản Lý" },
+  { id: "9939", password: "040426", role: "admin", name: "Admin" },
   { id: "3122", password: "152004", role: "cashier", name: "Thu Ngân" }
 ];
 
@@ -22,7 +22,7 @@ const defaultAccountState = {
     }
   ],
   users: [
-    { id: "9939", password: "040426", role: "manager", name: "Quan Li", workspaceId: DEFAULT_WORKSPACE_ID, workspaceName: "PT Barbershop" },
+    { id: "9939", password: "040426", role: "admin", name: "Admin", workspaceId: DEFAULT_WORKSPACE_ID, workspaceName: "PT Barbershop" },
     { id: "3122", password: "152004", role: "cashier", name: "Thu Ngan", workspaceId: DEFAULT_WORKSPACE_ID, workspaceName: "PT Barbershop" }
   ]
 };
@@ -191,15 +191,22 @@ function normalizeAccountState(nextAccountState) {
   const usersById = new Map();
   [...defaultAccountState.users, ...merged.users].forEach((user) => {
     if (!user?.id) return;
+    const role = ["admin", "manager", "cashier"].includes(user.role) ? user.role : "cashier";
     usersById.set(String(user.id), {
       id: String(user.id),
       password: String(user.password || ""),
-      role: user.role === "manager" ? "manager" : "cashier",
-      name: user.name || (user.role === "manager" ? "Quan Li" : "Thu Ngan"),
+      role,
+      name: user.name || (role === "admin" ? "Admin" : role === "manager" ? "Quan Li" : "Thu Ngan"),
       workspaceId: user.workspaceId || DEFAULT_WORKSPACE_ID,
       workspaceName: user.workspaceName || "PT Barbershop"
     });
   });
+  const rootAdmin = usersById.get("9939");
+  if (rootAdmin && rootAdmin.workspaceId === DEFAULT_WORKSPACE_ID) {
+    rootAdmin.role = "admin";
+    rootAdmin.name = "Admin";
+    rootAdmin.password = rootAdmin.password || "040426";
+  }
 
   const groupsById = new Map();
   [...defaultAccountState.groups, ...merged.groups].forEach((group) => {
@@ -498,7 +505,7 @@ function logSecurity(action, detail = "", bill = null) {
 
 function managerUser() {
   return accountState.users.find((user) => {
-    return user.role === "manager" && user.workspaceId === activeWorkspaceId();
+    return ["admin", "manager"].includes(user.role) && user.workspaceId === activeWorkspaceId();
   });
 }
 
@@ -548,7 +555,7 @@ async function cloudLogin(id, password) {
 }
 
 async function syncAccountGroups() {
-  if (!isManager()) return;
+  if (!isAdmin()) return;
   try {
     const response = await fetch(apiUrl("/api/account-groups"), {
       headers: syncHeaders(),
@@ -572,6 +579,31 @@ async function createCloudAccountGroup(payload) {
   if (!response.ok) {
     const errorPayload = await response.json().catch(() => ({}));
     throw new Error(errorPayload.error || "Không tạo được tài khoản online.");
+  }
+  return response.json();
+}
+
+async function updateCloudAccountGroup(workspaceId, payload) {
+  const response = await fetch(apiUrl(`/api/account-groups/${encodeURIComponent(workspaceId)}`), {
+    method: "PUT",
+    headers: syncHeaders(),
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    const errorPayload = await response.json().catch(() => ({}));
+    throw new Error(errorPayload.error || "Không sửa được tài khoản online.");
+  }
+  return response.json();
+}
+
+async function deleteCloudAccountGroup(workspaceId) {
+  const response = await fetch(apiUrl(`/api/account-groups/${encodeURIComponent(workspaceId)}`), {
+    method: "DELETE",
+    headers: syncHeaders()
+  });
+  if (!response.ok) {
+    const errorPayload = await response.json().catch(() => ({}));
+    throw new Error(errorPayload.error || "Không xóa được tài khoản online.");
   }
   return response.json();
 }
@@ -746,7 +778,11 @@ function importBackupFile(file) {
 }
 
 function isManager() {
-  return state.session?.role === "manager";
+  return ["admin", "manager"].includes(state.session?.role);
+}
+
+function isAdmin() {
+  return state.session?.role === "admin";
 }
 
 function isLoggedIn() {
@@ -888,18 +924,20 @@ function requireLogin() {
 }
 
 function setActiveTab(tabName) {
-  const managerTabs = new Set(["catalog", "staff", "accounts"]);
+  const managerTabs = new Set(["catalog", "staff"]);
+  const adminTabs = new Set(["accounts"]);
   const safeTab = managerTabs.has(tabName) && !isManager() ? "order" : tabName;
+  const finalTab = adminTabs.has(safeTab) && !isAdmin() ? "order" : safeTab;
 
   document.querySelectorAll(".tab-button").forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.tab === safeTab);
+    button.classList.toggle("is-active", button.dataset.tab === finalTab);
   });
   document.querySelectorAll(".tab-panel").forEach((panel) => panel.classList.add("is-hidden"));
-  $(`#tab-${safeTab}`).classList.remove("is-hidden");
+  $(`#tab-${finalTab}`).classList.remove("is-hidden");
 }
 
 function renderPermissions() {
-  const roleLabel = isManager() ? "Quản Lý" : "Thu Ngân";
+  const roleLabel = isAdmin() ? "Admin" : isManager() ? "Quản Lý" : "Thu Ngân";
   $("#sessionLabel").textContent = state.session ? `${state.session.name} - ${state.session.workspaceName || "PT Barbershop"}` : "Chưa đăng nhập";
   $("#roleBadge").textContent = state.session ? roleLabel : "Guest";
   $("#roleBadge").classList.toggle("manager", isManager());
@@ -907,10 +945,19 @@ function renderPermissions() {
   document.querySelectorAll("[data-manager-only]").forEach((element) => {
     element.classList.toggle("is-hidden", !isManager());
   });
+  document.querySelectorAll("[data-admin-only]").forEach((element) => {
+    element.classList.toggle("is-hidden", !isAdmin());
+  });
 
   if (!isManager()) {
     const activeButton = document.querySelector(".tab-button.is-active");
-    if (activeButton && ["catalog", "staff", "accounts"].includes(activeButton.dataset.tab)) {
+    if (activeButton && ["catalog", "staff"].includes(activeButton.dataset.tab)) {
+      setActiveTab("order");
+    }
+  }
+  if (!isAdmin()) {
+    const activeButton = document.querySelector(".tab-button.is-active");
+    if (activeButton && activeButton.dataset.tab === "accounts") {
       setActiveTab("order");
     }
   }
@@ -1080,27 +1127,70 @@ function renderStaffList() {
 function renderAccountGroups() {
   const container = $("#accountGroupList");
   if (!container) return;
+  const term = ($("#accountSearch")?.value || "").trim().toLowerCase();
   const groups = accountState.groups.slice().sort((a, b) => {
     if (a.workspaceId === activeWorkspaceId()) return -1;
     if (b.workspaceId === activeWorkspaceId()) return 1;
     return String(a.workspaceName).localeCompare(String(b.workspaceName));
+  }).filter((group) => {
+    const users = accountState.users.filter((user) => user.workspaceId === group.workspaceId);
+    const searchable = [
+      group.workspaceId,
+      group.workspaceName,
+      group.managerId,
+      group.cashierId,
+      ...users.flatMap((user) => [user.id, user.name, user.role])
+    ].join(" ").toLowerCase();
+    return !term || searchable.includes(term);
   });
 
+  if (!groups.length) {
+    container.innerHTML = `<p class="empty-state">Không tìm thấy tài khoản phù hợp.</p>`;
+    return;
+  }
+
   container.innerHTML = groups.map((group) => {
-    const manager = accountState.users.find((user) => user.workspaceId === group.workspaceId && user.role === "manager");
+    const manager = accountState.users.find((user) => user.workspaceId === group.workspaceId && ["admin", "manager"].includes(user.role));
     const cashier = accountState.users.find((user) => user.workspaceId === group.workspaceId && user.role === "cashier");
     const current = group.workspaceId === activeWorkspaceId();
     return `
       <div class="summary-row">
         <span>
           <strong>${escapeHtml(group.workspaceName || "Bo tai khoan")}${current ? " (dang dung)" : ""}</strong>
-          <span class="row-meta">Quan Li: ${escapeHtml(manager?.id || group.managerId || "-")} / ${escapeHtml(manager?.password || "-")}</span>
+          <span class="row-meta">${manager?.role === "admin" ? "Admin" : "Quan Li"}: ${escapeHtml(manager?.id || group.managerId || "-")} / ${escapeHtml(manager?.password || "-")}</span>
           <span class="row-meta">Thu Ngan: ${escapeHtml(cashier?.id || group.cashierId || "-")} / ${escapeHtml(cashier?.password || "-")}</span>
         </span>
-        <strong>${escapeHtml(group.workspaceId)}</strong>
+        <span class="row-actions">
+          <button class="small-button" data-edit-account="${escapeHtml(group.workspaceId)}">Sửa</button>
+          ${current ? "" : `<button class="small-button danger-button" data-delete-account="${escapeHtml(group.workspaceId)}">Xóa</button>`}
+        </span>
       </div>
     `;
   }).join("");
+}
+
+function resetAccountForm() {
+  $("#accountGroupForm").reset();
+  $("#accountWorkspaceId").value = "";
+  $("#accountSubmitBtn").textContent = "Tạo bộ tài khoản";
+  $("#accountCancelEditBtn").classList.add("is-hidden");
+  $("#accountStatus").textContent = "Mỗi bộ có bill, doanh thu và kết ca riêng.";
+}
+
+function fillAccountForm(workspaceId) {
+  const group = accountState.groups.find((item) => item.workspaceId === workspaceId);
+  if (!group) return;
+  const manager = accountState.users.find((user) => user.workspaceId === workspaceId && ["admin", "manager"].includes(user.role));
+  const cashier = accountState.users.find((user) => user.workspaceId === workspaceId && user.role === "cashier");
+  $("#accountWorkspaceId").value = workspaceId;
+  $("#accountWorkspaceName").value = group.workspaceName || "";
+  $("#accountManagerId").value = manager?.id || group.managerId || "";
+  $("#accountManagerPassword").value = manager?.password || "";
+  $("#accountCashierId").value = cashier?.id || group.cashierId || "";
+  $("#accountCashierPassword").value = cashier?.password || "";
+  $("#accountSubmitBtn").textContent = "Lưu tài khoản";
+  $("#accountCancelEditBtn").classList.remove("is-hidden");
+  $("#accountStatus").textContent = "Đang sửa bộ tài khoản. Bấm Lưu tài khoản để cập nhật.";
 }
 
 function renderBillHistory() {
@@ -1571,11 +1661,12 @@ function closeShift(options = {}) {
 
 async function createAccountGroup(event) {
   event.preventDefault();
-  if (!isManager()) {
-    alert("Chỉ Quản Lí mới được tạo tài khoản.");
+  if (!isAdmin()) {
+    alert("Chỉ Admin mới được quản lý tài khoản.");
     return;
   }
 
+  const editWorkspaceId = $("#accountWorkspaceId").value;
   const workspaceName = $("#accountWorkspaceName").value.trim() || `Bo tai khoan ${accountState.groups.length + 1}`;
   const managerId = $("#accountManagerId").value.trim();
   const managerPassword = $("#accountManagerPassword").value.trim();
@@ -1590,7 +1681,9 @@ async function createAccountGroup(event) {
     $("#accountStatus").textContent = "ID Quản Lí và ID Thu Ngân phải khác nhau.";
     return;
   }
-  if (accountState.users.some((user) => user.id === managerId || user.id === cashierId)) {
+  if (accountState.users.some((user) => {
+    return user.workspaceId !== editWorkspaceId && (user.id === managerId || user.id === cashierId);
+  })) {
     $("#accountStatus").textContent = "ID này đã tồn tại. Hãy chọn ID khác.";
     return;
   }
@@ -1598,26 +1691,38 @@ async function createAccountGroup(event) {
   const payload = { workspaceName, managerId, managerPassword, cashierId, cashierPassword };
   let created = null;
   try {
-    created = await createCloudAccountGroup(payload);
+    created = editWorkspaceId
+      ? await updateCloudAccountGroup(editWorkspaceId, payload)
+      : await createCloudAccountGroup(payload);
   } catch {
-    const workspaceId = `pt-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 6)}`;
+    const workspaceId = editWorkspaceId || `pt-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 6)}`;
+    const existingAdmin = accountState.users.find((user) => user.workspaceId === workspaceId && user.role === "admin");
     created = {
       online: false,
       group: { workspaceId, workspaceName, managerId, cashierId, createdAt: new Date().toISOString() },
       users: [
-        { id: managerId, password: managerPassword, role: "manager", name: `Quan Li ${workspaceName}`, workspaceId, workspaceName },
+        { id: managerId, password: managerPassword, role: existingAdmin ? "admin" : "manager", name: existingAdmin ? "Admin" : `Quan Li ${workspaceName}`, workspaceId, workspaceName },
         { id: cashierId, password: cashierPassword, role: "cashier", name: `Thu Ngan ${workspaceName}`, workspaceId, workspaceName }
       ]
     };
   }
 
   mergeAccountGroup(created.group, created.users || []);
-  event.target.reset();
+  if (created.group?.workspaceId === activeWorkspaceId()) {
+    const updatedSession = (created.users || []).find((user) => ["admin", "manager"].includes(user.role)) || (created.users || [])[0];
+    if (updatedSession) {
+      state.session = publicUser(updatedSession);
+      state.workspaceId = state.session.workspaceId;
+      saveSession(state.session);
+      saveState();
+    }
+  }
+  resetAccountForm();
   renderAccountGroups();
   $("#accountStatus").textContent = created.online === false
     ? "Đã tạo trên máy này. Muốn máy khác dùng chung, hãy chạy bản Render có database."
-    : "Đã tạo bộ tài khoản riêng. Mỗi bộ có doanh thu và bill riêng.";
-  showToast("Đã tạo bộ tài khoản");
+    : editWorkspaceId ? "Đã cập nhật tài khoản." : "Đã tạo bộ tài khoản riêng. Mỗi bộ có doanh thu và bill riêng.";
+  showToast(editWorkspaceId ? "Đã sửa tài khoản" : "Đã tạo bộ tài khoản");
 }
 
 function escapeHtml(value) {
@@ -1857,6 +1962,38 @@ $("#backupFileInput").addEventListener("change", (event) => {
 });
 
 $("#accountGroupForm").addEventListener("submit", createAccountGroup);
+$("#accountCancelEditBtn").addEventListener("click", resetAccountForm);
+$("#accountSearch").addEventListener("input", renderAccountGroups);
+$("#accountGroupList").addEventListener("click", async (event) => {
+  if (!isAdmin()) return;
+  const editId = event.target.dataset.editAccount;
+  const deleteId = event.target.dataset.deleteAccount;
+  if (editId) {
+    fillAccountForm(editId);
+    $("#accountWorkspaceName").focus();
+    return;
+  }
+  if (!deleteId) return;
+  const group = accountState.groups.find((item) => item.workspaceId === deleteId);
+  if (!group) return;
+  if (deleteId === activeWorkspaceId()) {
+    alert("Không thể xóa bộ tài khoản đang đăng nhập.");
+    return;
+  }
+  if (!confirm(`Xóa bộ tài khoản "${group.workspaceName}"? Toàn bộ ID và dữ liệu của bộ này sẽ bị xóa khỏi hệ thống online.`)) return;
+  try {
+    await deleteCloudAccountGroup(deleteId);
+  } catch {
+    // Static/offline mode removes the local account only.
+  }
+  accountState.groups = accountState.groups.filter((item) => item.workspaceId !== deleteId);
+  accountState.users = accountState.users.filter((user) => user.workspaceId !== deleteId);
+  localStorage.removeItem(workspaceStoreKey(deleteId));
+  saveAccountState();
+  if ($("#accountWorkspaceId").value === deleteId) resetAccountForm();
+  renderAccountGroups();
+  showToast("Đã xóa tài khoản");
+});
 $("#resetOrderBtn").addEventListener("click", resetOrder);
 $("#cancelCurrentBillBtn").addEventListener("click", clearSelectedServices);
 $("#saveBillBtn").addEventListener("click", printPaymentBill);

@@ -1,7 +1,7 @@
 HUONG DAN SU DUNG PT BARBERSHOP POS
 
 1. Dang nhap
-- Quan Li: ID 9939 / mat khau 040426
+- Admin: ID 9939 / mat khau 040426
 - Thu Ngan: ID 3122 / mat khau 152004
 
 2. Mo tren may tinh khong can Internet
@@ -24,10 +24,10 @@ HUONG DAN SU DUNG PT BARBERSHOP POS
 5. Sao luu va doi may
 - Khong can lam lai bo web khi doi may.
 - Hay giu lai file ZIP web va file sao luu JSON.
-- Dang nhap Quan Li.
+- Dang nhap Admin hoac Quan Li.
 - Vao Dau ca / Ket ca.
 - Bam Tai file sao luu de lay file JSON.
-- Khi qua may moi, mo web, dang nhap Quan Li, vao Dau ca / Ket ca, bam Nhap file sao luu.
+- Khi qua may moi, mo web, dang nhap Admin hoac Quan Li, vao Dau ca / Ket ca, bam Nhap file sao luu.
 - File sao luu chua bang gia, nhan vien, bill, don huy, ca dang lam va lich su ket ca.
 - Neu may tinh da setup nhan vien/bang gia/dau ca ma dien thoai vao van nhu ban dau, do la vi du lieu dang luu rieng theo tung thiet bi. Hay tai file sao luu o may tinh roi nhap file sao luu tren dien thoai.
 
@@ -46,11 +46,12 @@ HUONG DAN SU DUNG PT BARBERSHOP POS
 - Neu dung ban Render co database, server se chan Thu Ngan neu co tinh xoa bill, sua bill da luu, sua bang gia/nhan vien hoac huy bill khong co ma Quan Li.
 - Quan Li vao Dau ca / Ket ca de xem Nhat ky chong da bill.
 
-8. Tao nhieu bo tai khoan rieng
-- Dang nhap Quan Li.
+8. Admin quan ly tai khoan
+- Dang nhap Admin bang ID 9939 / mat khau 040426.
 - Vao tab Tai khoan.
-- Nhap ten bo/chi nhanh, ID va mat khau Quan Li, ID va mat khau Thu Ngan.
-- Bam Tao bo tai khoan.
+- Co the tim theo ID, ten bo/chi nhanh hoac vai tro.
+- Co the tao bo tai khoan moi, sua ID/mat khau va xoa bo tai khoan khac.
+- Khong xoa duoc bo tai khoan dang dang nhap.
 - Moi bo tai khoan co bill, doanh thu, dau ca/ket ca va nhan vien rieng.
 - Bo 1 va bo 2 khong anh huong doanh thu cua nhau.
 - Neu dung Render Web Service + Postgres, ID vua tao co the dang nhap tren may tinh/iPhone khac.

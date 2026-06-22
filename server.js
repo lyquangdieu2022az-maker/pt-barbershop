@@ -9,13 +9,8 @@ const outputsDir = path.join(__dirname, "outputs");
 const DEFAULT_WORKSPACE_ID = "pt-main";
 
 const defaultUsers = new Map([
-  ["9939", { password: "040426", role: "manager", name: "Quan Li", workspaceId: DEFAULT_WORKSPACE_ID, workspaceName: "PT Barbershop" }],
+  ["9939", { password: "040426", role: "admin", name: "Admin", workspaceId: DEFAULT_WORKSPACE_ID, workspaceName: "PT Barbershop" }],
   ["3122", { password: "152004", role: "cashier", name: "Thu Ngan", workspaceId: DEFAULT_WORKSPACE_ID, workspaceName: "PT Barbershop" }]
-]);
-
-const users = new Map([
-  ["9939", { password: "040426", role: "manager", name: "Quản Lý" }],
-  ["3122", { password: "152004", role: "cashier", name: "Thu Ngân" }]
 ]);
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -100,7 +95,7 @@ async function managerApproved(req) {
   const id = String(req.get("X-PT-Manager-User") || "");
   const password = String(req.get("X-PT-Manager-Password") || "");
   const user = await findUser(id, password).catch(() => null);
-  return Boolean(user && user.role === "manager" && user.workspaceId === req.user.workspaceId);
+  return Boolean(user && ["admin", "manager"].includes(user.role) && user.workspaceId === req.user.workspaceId);
 }
 
 function stableStringify(value) {
@@ -231,13 +226,15 @@ async function ensureDb() {
     CREATE TABLE IF NOT EXISTS app_users (
       id text PRIMARY KEY,
       password text NOT NULL,
-      role text NOT NULL CHECK (role IN ('manager', 'cashier')),
+      role text NOT NULL CHECK (role IN ('admin', 'manager', 'cashier')),
       name text NOT NULL,
       workspace_id text NOT NULL REFERENCES account_groups(workspace_id) ON DELETE CASCADE,
       workspace_name text NOT NULL,
       created_at timestamptz NOT NULL DEFAULT now()
     )
   `);
+  await pool.query("ALTER TABLE app_users DROP CONSTRAINT IF EXISTS app_users_role_check");
+  await pool.query("ALTER TABLE app_users ADD CONSTRAINT app_users_role_check CHECK (role IN ('admin', 'manager', 'cashier'))");
   await pool.query(`
     CREATE TABLE IF NOT EXISTS workspace_states (
       workspace_id text PRIMARY KEY REFERENCES account_groups(workspace_id) ON DELETE CASCADE,
@@ -258,7 +255,8 @@ async function ensureDb() {
       `
         INSERT INTO app_users (id, password, role, name, workspace_id, workspace_name)
         VALUES ($1, $2, $3, $4, $5, $6)
-        ON CONFLICT (id) DO NOTHING
+        ON CONFLICT (id)
+        DO UPDATE SET password = EXCLUDED.password, role = EXCLUDED.role, name = EXCLUDED.name, workspace_id = EXCLUDED.workspace_id, workspace_name = EXCLUDED.workspace_name
       `,
       [id, user.password, user.role, user.name, user.workspaceId, user.workspaceName]
     );
@@ -295,7 +293,7 @@ app.post("/api/login", async (req, res, next) => {
     let group = {
       workspaceId: user.workspaceId,
       workspaceName: user.workspaceName,
-      managerId: user.role === "manager" ? user.id : "",
+      managerId: ["admin", "manager"].includes(user.role) ? user.id : "",
       cashierId: user.role === "cashier" ? user.id : "",
       createdAt: ""
     };
@@ -340,8 +338,8 @@ app.post("/api/login", async (req, res, next) => {
 
 app.get("/api/account-groups", requireAuth, async (req, res, next) => {
   try {
-    if (req.user.role !== "manager") {
-      res.status(403).json({ error: "Only manager can view accounts" });
+    if (req.user.role !== "admin") {
+      res.status(403).json({ error: "Only admin can view accounts" });
       return;
     }
     await ensureDb();
@@ -378,8 +376,8 @@ app.get("/api/account-groups", requireAuth, async (req, res, next) => {
 
 app.post("/api/account-groups", requireAuth, async (req, res, next) => {
   try {
-    if (req.user.role !== "manager") {
-      res.status(403).json({ error: "Only manager can create accounts" });
+    if (req.user.role !== "admin") {
+      res.status(403).json({ error: "Only admin can create accounts" });
       return;
     }
     await ensureDb();
@@ -426,6 +424,107 @@ app.post("/api/account-groups", requireAuth, async (req, res, next) => {
   }
 });
 
+app.put("/api/account-groups/:workspaceId", requireAuth, async (req, res, next) => {
+  try {
+    if (req.user.role !== "admin") {
+      res.status(403).json({ error: "Only admin can update accounts" });
+      return;
+    }
+    await ensureDb();
+    const workspaceId = String(req.params.workspaceId || "");
+    const workspaceName = String(req.body?.workspaceName || "").trim() || "PT Barbershop";
+    const managerId = String(req.body?.managerId || "").trim();
+    const managerPassword = String(req.body?.managerPassword || "").trim();
+    const cashierId = String(req.body?.cashierId || "").trim();
+    const cashierPassword = String(req.body?.cashierPassword || "").trim();
+    if (!workspaceId || !managerId || !managerPassword || !cashierId || !cashierPassword || managerId === cashierId) {
+      res.status(400).json({ error: "Invalid account data" });
+      return;
+    }
+    const groupExists = await pool.query("SELECT workspace_id FROM account_groups WHERE workspace_id = $1", [workspaceId]);
+    if (!groupExists.rows.length) {
+      res.status(404).json({ error: "Account group not found" });
+      return;
+    }
+    const duplicate = await pool.query(
+      "SELECT id FROM app_users WHERE workspace_id <> $1 AND id = ANY($2::text[])",
+      [workspaceId, [managerId, cashierId]]
+    );
+    if (duplicate.rows.length) {
+      res.status(409).json({ error: "ID already exists" });
+      return;
+    }
+
+    const existingAdmin = await pool.query(
+      "SELECT id FROM app_users WHERE workspace_id = $1 AND role = 'admin' LIMIT 1",
+      [workspaceId]
+    );
+    const managerRole = existingAdmin.rows.length ? "admin" : "manager";
+    const managerName = managerRole === "admin" ? "Admin" : `Quan Li ${workspaceName}`;
+    const users = [
+      { id: managerId, password: managerPassword, role: managerRole, name: managerName, workspaceId, workspaceName },
+      { id: cashierId, password: cashierPassword, role: "cashier", name: `Thu Ngan ${workspaceName}`, workspaceId, workspaceName }
+    ];
+    await pool.query("BEGIN");
+    try {
+      await pool.query(
+        "UPDATE account_groups SET workspace_name = $2, manager_id = $3, cashier_id = $4 WHERE workspace_id = $1",
+        [workspaceId, workspaceName, managerId, cashierId]
+      );
+      await pool.query("DELETE FROM app_users WHERE workspace_id = $1", [workspaceId]);
+      for (const user of users) {
+        await pool.query(
+          "INSERT INTO app_users (id, password, role, name, workspace_id, workspace_name) VALUES ($1, $2, $3, $4, $5, $6)",
+          [user.id, user.password, user.role, user.name, workspaceId, workspaceName]
+        );
+      }
+      await pool.query("COMMIT");
+    } catch (error) {
+      await pool.query("ROLLBACK");
+      throw error;
+    }
+    res.json({
+      online: true,
+      group: { workspaceId, workspaceName, managerId, cashierId, createdAt: "" },
+      users
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/account-groups/:workspaceId", requireAuth, async (req, res, next) => {
+  try {
+    if (req.user.role !== "admin") {
+      res.status(403).json({ error: "Only admin can delete accounts" });
+      return;
+    }
+    await ensureDb();
+    const workspaceId = String(req.params.workspaceId || "");
+    if (!workspaceId || workspaceId === req.user.workspaceId) {
+      res.status(400).json({ error: "Cannot delete current account group" });
+      return;
+    }
+    await pool.query("BEGIN");
+    try {
+      await pool.query("DELETE FROM workspace_states WHERE workspace_id = $1", [workspaceId]);
+      await pool.query("DELETE FROM app_users WHERE workspace_id = $1", [workspaceId]);
+      const result = await pool.query("DELETE FROM account_groups WHERE workspace_id = $1", [workspaceId]);
+      await pool.query("COMMIT");
+      if (!result.rowCount) {
+        res.status(404).json({ error: "Account group not found" });
+        return;
+      }
+      res.json({ ok: true });
+    } catch (error) {
+      await pool.query("ROLLBACK");
+      throw error;
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get("/api/state", requireAuth, async (req, res, next) => {
   try {
     await ensureDb();
@@ -454,7 +553,7 @@ app.post("/api/state", requireAuth, async (req, res, next) => {
     }
     const previousResult = await pool.query("SELECT data FROM workspace_states WHERE workspace_id = $1", [req.user.workspaceId]);
     const previous = previousResult.rows[0]?.data || null;
-    if (req.user.role !== "manager") {
+    if (!["admin", "manager"].includes(req.user.role)) {
       req.managerApproved = await managerApproved(req);
       requireCashierSafeUpdate(previous, data, req);
     }

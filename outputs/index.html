@@ -60,7 +60,7 @@
           <button class="tab-button is-active" data-tab="order">Order & Bill</button>
           <button class="tab-button" data-tab="catalog" data-manager-only>Bảng giá & %</button>
           <button class="tab-button" data-tab="staff" data-manager-only>Nhân viên</button>
-          <button class="tab-button" data-tab="accounts" data-manager-only>T&#224;i kho&#7843;n</button>
+          <button class="tab-button" data-tab="accounts" data-admin-only>T&#224;i kho&#7843;n</button>
           <button class="tab-button" data-tab="shift">Đầu ca / Kết ca</button>
         </nav>
         <button id="logoutBtn" class="ghost-button sidebar-logout">Đăng xuất</button>
@@ -261,7 +261,7 @@
           </div>
         </section>
 
-        <section id="tab-accounts" class="tab-panel is-hidden" data-manager-only>
+        <section id="tab-accounts" class="tab-panel is-hidden" data-admin-only>
           <div class="two-col">
             <section class="panel">
               <div class="panel-head">
@@ -271,6 +271,7 @@
                 </div>
               </div>
               <form id="accountGroupForm" class="stack-form">
+                <input id="accountWorkspaceId" type="hidden">
                 <label>T&#234;n b&#7897; / chi nh&#225;nh
                   <input id="accountWorkspaceName" placeholder="VD: Thu ngan 2">
                 </label>
@@ -288,7 +289,8 @@
                     <input id="accountCashierPassword" placeholder="VD: 152004">
                   </label>
                 </div>
-                <button type="submit" class="primary-button">T&#7841;o b&#7897; t&#224;i kho&#7843;n</button>
+                <button id="accountSubmitBtn" type="submit" class="primary-button">T&#7841;o b&#7897; t&#224;i kho&#7843;n</button>
+                <button id="accountCancelEditBtn" type="button" class="ghost-button is-hidden">H&#7911;y s&#7917;a</button>
                 <p id="accountStatus" class="backup-status">M&#7895;i b&#7897; c&#243; bill, doanh thu v&#224; k&#7871;t ca ri&#234;ng.</p>
               </form>
             </section>
@@ -299,6 +301,9 @@
                   <h3>B&#7897; t&#224;i kho&#7843;n</h3>
                 </div>
               </div>
+              <label class="search-field">T&#236;m ID / t&#234;n b&#7897;
+                <input id="accountSearch" placeholder="VD: 9939, 3122, chi nhanh 2">
+              </label>
               <div id="accountGroupList" class="summary-list"></div>
             </section>
           </div>

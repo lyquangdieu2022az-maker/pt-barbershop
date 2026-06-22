@@ -11,7 +11,7 @@ Luu y quan trong:
 - Tinh nang chong da bill manh nhat khi dung Web Service + Postgres: server se chan Thu Ngan neu co tinh xoa/sua bill da luu hoac huy bill khong co ma Quan Li.
 
 Tai khoan dang nhap trong web:
-- Quan Li: ID 9939 / mat khau 040426
+- Admin: ID 9939 / mat khau 040426
 - Thu Ngan: ID 3122 / mat khau 152004
 
 Cach dua len Render dung cach:
