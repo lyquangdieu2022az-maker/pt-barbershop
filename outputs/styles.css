@@ -238,6 +238,16 @@ select:focus {
   gap: 12px;
 }
 
+.shop-mark > div {
+  min-width: 0;
+}
+
+.shop-mark strong,
+.shop-mark span {
+  overflow-wrap: anywhere;
+  line-height: 1.2;
+}
+
 .shop-mark img {
   width: 54px;
   height: 54px;

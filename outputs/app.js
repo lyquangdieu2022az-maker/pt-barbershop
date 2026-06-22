@@ -942,9 +942,15 @@ function setActiveTab(tabName) {
   $(`#tab-${finalTab}`).classList.remove("is-hidden");
 }
 
+function branchBrandName(workspaceName = "") {
+  const branchName = String(workspaceName || "PT Barbershop").trim() || "PT Barbershop";
+  const upperBranch = branchName.toLocaleUpperCase("vi-VN");
+  return upperBranch.includes("PT BARBERSHOP") ? upperBranch : `${upperBranch} x PT BARBERSHOP`;
+}
+
 function renderPermissions() {
   const roleLabel = isAdmin() ? "Admin" : isManager() ? "Quản Lý" : "Thu Ngân";
-  $("#sessionLabel").textContent = state.session ? `${state.session.name} - ${state.session.workspaceName || "PT Barbershop"}` : "Chưa đăng nhập";
+  $("#sessionLabel").textContent = state.session ? `ID ${state.session.id} - ${branchBrandName(state.session.workspaceName)}` : "Chưa đăng nhập";
   $("#roleBadge").textContent = state.session ? roleLabel : "Guest";
   $("#roleBadge").classList.toggle("manager", isManager());
 
