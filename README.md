@@ -58,9 +58,18 @@ Neu dau trang hien `Dong bo: Luu tren may nay`, backend/database chua ket noi ne
 - Khi huy bill da luu phai nhap ly do va can ma Quan Li duyet.
 - Thu Ngan khong xem duoc chi tiet huy bill; chi Quan Li moi xem duoc.
 
+## In bill tinh tien
+
+- He thong chi co 1 nut chinh: `In bill`.
+- Bam nut `In bill` se luu hoa don vao he thong truoc, tao So HD/STT, tinh doanh thu, tinh tien chia tho va in bill day du.
+- Tho chi lam theo bill da duoc in tu nut nay.
+- Sau khi da in bill, hoa don nam trong lich su bill va khong the xoa.
+
 ## Chong da bill
 
 - Bill da luu duoc khoa: khong co sua bill va khong co xoa bill.
+- Nut `In bill` se luu hoa don vao he thong truoc roi moi in, khong con in hoa don nhap.
+- Sau khi da in/luu, `Xoa dich vu` chi xoa bill dang soan moi, khong xoa duoc hoa don da luu.
 - Thu Ngan muon huy bill phai nhap ly do va ID/mat khau Quan Li.
 - Quan Li xem duoc `Nhat ky chong da bill` trong tab `Dau ca / Ket ca`.
 - Nhat ky ghi lai luu bill, huy bill, mo ca, ket ca va khoi phuc du lieu.

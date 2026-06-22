@@ -61,13 +61,21 @@ HUONG DAN SU DUNG PT BARBERSHOP POS
 - Phieu ket ca se in ro doanh thu theo Tien mat, Chuyen khoan, The, Khac.
 - Man hinh Order co bang so lieu nhanh: doanh thu ca, STT tiep theo, tien mat trong ca, nhan vien noi bat/so don huy.
 
-10. Chong da bill
+10. In bill tinh tien
+- He thong chi co 1 nut chinh: In bill.
+- Bam nut In bill se luu hoa don vao he thong truoc, tao So HD/STT, tinh doanh thu, tinh tien chia tho va in bill day du.
+- Tho chi lam theo bill da duoc in tu nut nay.
+- Sau khi da in bill, hoa don nam trong lich su bill va khong the xoa.
+
+11. Chong da bill
 - Bill da luu duoc khoa: khong co nut sua bill, khong co xoa bill.
+- Nut In bill se luu hoa don vao he thong truoc roi moi in, khong con in hoa don nhap.
+- Sau khi da in/luu, bam Xoa dich vu chi xoa bill dang soan moi, khong xoa duoc hoa don da luu.
 - Thu Ngan muon huy bill phai nhap ly do va can ID/mat khau Quan Li duyet.
 - He thong ghi Nhat ky bao mat khi luu bill, huy bill, mo ca, ket ca, khoi phuc du lieu.
 - Quan Li xem duoc ai thao tac, luc nao, voi hoa don nao.
 - Khoa manh nhat la chay ban Render Web Service + Postgres, vi server se tu choi luu du lieu neu Thu Ngan co tinh lam mat bill.
 
-11. Gui cho nguoi khac
+12. Gui cho nguoi khac
 - Chi gui file ZIP khi ban da kiem tra xong.
 - Nguoi nhan giai nen ZIP truoc, sau do mo index.html.

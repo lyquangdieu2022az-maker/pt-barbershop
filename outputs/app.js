@@ -1082,22 +1082,23 @@ function clearSelectedServices() {
   showToast(`Đã mở ca với ${money(state.shift.openingCash)}`);
 }
 
-function saveBill() {
+function saveBill(options = {}) {
+  const shouldPrint = options?.print === true;
   const staff = staffById($("#orderStaff").value);
   state.selectedServiceIds = selectedServiceIds();
   const services = selectedServices();
   if (!staff) {
     alert("Hãy thêm hoặc chọn nhân viên.");
-    return;
+    return null;
   }
   if (!services.length) {
     alert("Hãy chọn ít nhất 1 dịch vụ.");
-    return;
+    return null;
   }
   if (!state.shift.isOpen) {
     alert("Hãy nhập đầu ca trước khi lưu bill.");
     setActiveTab("shift");
-    return;
+    return null;
   }
 
   const { total, commission } = billTotals(services);
@@ -1138,7 +1139,8 @@ function saveBill() {
     bill
   );
   resetOrder();
-  showToast(`Đã lưu ${bill.invoiceNo} - STT #${bill.queueNo}`);
+  showToast(`${shouldPrint ? "Đã lưu và in" : "Đã lưu"} ${bill.invoiceNo} - STT #${bill.queueNo}`);
+  return bill;
 }
 
 function cancelBill(billId) {
@@ -1166,26 +1168,9 @@ function cancelBill(billId) {
   showToast(`Đã hủy ${bill.invoiceNo}`);
 }
 
-function printCurrentBill() {
-  const staff = staffById($("#orderStaff").value);
-  const services = selectedServices();
-  if (!services.length) {
-    alert("Hãy chọn dịch vụ trước khi in bill.");
-    return;
-  }
-  const { total } = billTotals(services);
-  printBill({
-    createdAt: new Date().toISOString(),
-    invoiceNo: formatInvoiceNo(Number(state.invoiceCounter || 0) + 1),
-    queueNo: state.shift.isOpen ? Number(state.shift.queueCounter || 0) + 1 : "",
-    customer: $("#customerName").value.trim() || "Khách lẻ",
-    phone: $("#customerPhone").value.trim(),
-    staffName: staff?.name || "Chưa chọn",
-    paymentMethod: safePaymentMethod($("#paymentMethod").value),
-    items: services,
-    total,
-    status: "draft"
-  });
+function printPaymentBill() {
+  const bill = saveBill({ print: true });
+  if (bill) printBill(bill);
 }
 
 function printSavedBill(billId) {
@@ -1563,8 +1548,7 @@ $("#backupFileInput").addEventListener("change", (event) => {
 
 $("#resetOrderBtn").addEventListener("click", resetOrder);
 $("#cancelCurrentBillBtn").addEventListener("click", clearSelectedServices);
-$("#saveBillBtn").addEventListener("click", saveBill);
-$("#printBillBtn").addEventListener("click", printCurrentBill);
+$("#saveBillBtn").addEventListener("click", printPaymentBill);
 $("#billSearch").addEventListener("input", renderBillHistory);
 
 renderAll();

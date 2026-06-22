@@ -8,6 +8,11 @@ Luu y quan trong:
 - Khi deploy dung, may tinh tao bill thi iPhone se thay, iPhone huy bill thi may tinh se cap nhat.
 - Neu database bi tat/chua cau hinh, web van luu tam tren may do va hien trang thai "Luu tren may nay".
 - Van nen dung nut Tai file sao luu dinh ky de phong truong hop can khoi phuc.
+- Tinh nang chong da bill manh nhat khi dung Web Service + Postgres: server se chan Thu Ngan neu co tinh xoa/sua bill da luu hoac huy bill khong co ma Quan Li.
+
+Tai khoan dang nhap trong web:
+- Quan Li: ID 9939 / mat khau 040426
+- Thu Ngan: ID 3122 / mat khau 152004
 
 Cach dua len Render dung cach:
 1. Tao tai khoan hoac dang nhap Render: https://dashboard.render.com/
