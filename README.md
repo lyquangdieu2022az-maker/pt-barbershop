@@ -58,6 +58,17 @@ Khi deploy dung voi database, du lieu luu online va cac may se thay chung. Van n
 
 Neu dau trang hien `Dong bo: Luu tren may nay`, backend/database chua ket noi nen du lieu tam thoi chi nam tren may do.
 
+## Tao nhieu bo tai khoan rieng
+
+- Dang nhap Quan Li.
+- Vao tab `Tai khoan`.
+- Nhap ten bo/chi nhanh, ID va mat khau Quan Li, ID va mat khau Thu Ngan.
+- Bam `Tao bo tai khoan`.
+- Moi bo tai khoan co bill, doanh thu, dau ca/ket ca va nhan vien rieng.
+- Bo 1 va bo 2 khong anh huong doanh thu cua nhau.
+- Khi dung Render Web Service + Postgres, ID vua tao co the dang nhap tren may tinh/iPhone khac.
+- Neu dang chay offline/local, ID moi chi luu tren thiet bi dang tao.
+
 ## Hoa don
 
 - Moi bill da luu co So HD, vi du `HD000001`.

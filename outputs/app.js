@@ -1,12 +1,31 @@
 const STORE_KEY = "barbershop-order-v1";
+const ACCOUNT_STORE_KEY = "barbershop-accounts-v1";
+const SESSION_KEY = "barbershop-session-v1";
 const BACKUP_VERSION = 1;
 const SYNC_INTERVAL_MS = 2500;
 const API_BASE_URL = String(window.PT_API_BASE_URL || "").replace(/\/+$/, "");
+const DEFAULT_WORKSPACE_ID = "pt-main";
 
 const USERS = [
   { id: "9939", password: "040426", role: "manager", name: "Quản Lý" },
   { id: "3122", password: "152004", role: "cashier", name: "Thu Ngân" }
 ];
+
+const defaultAccountState = {
+  groups: [
+    {
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      workspaceName: "PT Barbershop",
+      managerId: "9939",
+      cashierId: "3122",
+      createdAt: ""
+    }
+  ],
+  users: [
+    { id: "9939", password: "040426", role: "manager", name: "Quan Li", workspaceId: DEFAULT_WORKSPACE_ID, workspaceName: "PT Barbershop" },
+    { id: "3122", password: "152004", role: "cashier", name: "Thu Ngan", workspaceId: DEFAULT_WORKSPACE_ID, workspaceName: "PT Barbershop" }
+  ]
+};
 
 const categoryNames = {
   cut: "Cắt",
@@ -30,6 +49,7 @@ const SECURITY_LOG_LIMIT = 500;
 const defaultState = {
   session: null,
   loggedIn: false,
+  workspaceId: DEFAULT_WORKSPACE_ID,
   invoiceCounter: 0,
   staff: [
     { id: crypto.randomUUID(), name: "Nhân viên A" },
@@ -61,7 +81,17 @@ const defaultState = {
   securityLog: []
 };
 
-let state = loadState();
+let accountState = loadAccountState();
+let savedSession = loadSavedSession();
+let state = loadState(savedSession?.workspaceId || DEFAULT_WORKSPACE_ID);
+if (savedSession && findLocalUser(savedSession.id, savedSession.password)) {
+  state.session = publicUser(findLocalUser(savedSession.id, savedSession.password));
+  state.loggedIn = true;
+  state.workspaceId = state.session.workspaceId;
+} else {
+  savedSession = null;
+  saveSession(null);
+}
 let cloudStarted = false;
 let cloudBooting = false;
 let cloudSaveTimer = null;
@@ -153,20 +183,124 @@ function nextQueueNumber() {
   return state.shift.queueCounter;
 }
 
-function loadState() {
-  const saved = localStorage.getItem(STORE_KEY);
-  if (!saved) return structuredClone(defaultState);
+function normalizeAccountState(nextAccountState) {
+  const merged = {
+    groups: Array.isArray(nextAccountState?.groups) ? nextAccountState.groups : [],
+    users: Array.isArray(nextAccountState?.users) ? nextAccountState.users : []
+  };
+  const usersById = new Map();
+  [...defaultAccountState.users, ...merged.users].forEach((user) => {
+    if (!user?.id) return;
+    usersById.set(String(user.id), {
+      id: String(user.id),
+      password: String(user.password || ""),
+      role: user.role === "manager" ? "manager" : "cashier",
+      name: user.name || (user.role === "manager" ? "Quan Li" : "Thu Ngan"),
+      workspaceId: user.workspaceId || DEFAULT_WORKSPACE_ID,
+      workspaceName: user.workspaceName || "PT Barbershop"
+    });
+  });
+
+  const groupsById = new Map();
+  [...defaultAccountState.groups, ...merged.groups].forEach((group) => {
+    if (!group?.workspaceId) return;
+    const users = [...usersById.values()].filter((user) => user.workspaceId === group.workspaceId);
+    groupsById.set(String(group.workspaceId), {
+      workspaceId: String(group.workspaceId),
+      workspaceName: group.workspaceName || users[0]?.workspaceName || "PT Barbershop",
+      managerId: group.managerId || users.find((user) => user.role === "manager")?.id || "",
+      cashierId: group.cashierId || users.find((user) => user.role === "cashier")?.id || "",
+      createdAt: group.createdAt || ""
+    });
+  });
+
+  return {
+    groups: [...groupsById.values()],
+    users: [...usersById.values()]
+  };
+}
+
+function loadAccountState() {
+  const saved = localStorage.getItem(ACCOUNT_STORE_KEY);
+  if (!saved) return structuredClone(defaultAccountState);
+  try {
+    return normalizeAccountState(JSON.parse(saved));
+  } catch {
+    return structuredClone(defaultAccountState);
+  }
+}
+
+function saveAccountState() {
+  accountState = normalizeAccountState(accountState);
+  localStorage.setItem(ACCOUNT_STORE_KEY, JSON.stringify(accountState));
+}
+
+function loadSavedSession() {
+  try {
+    return JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function saveSession(session) {
+  if (session) {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  } else {
+    localStorage.removeItem(SESSION_KEY);
+  }
+}
+
+function workspaceStoreKey(workspaceId) {
+  return `${STORE_KEY}:${workspaceId || DEFAULT_WORKSPACE_ID}`;
+}
+
+function activeWorkspaceId() {
+  return state.session?.workspaceId || state.workspaceId || DEFAULT_WORKSPACE_ID;
+}
+
+function publicUser(user) {
+  return user ? {
+    id: user.id,
+    password: user.password,
+    role: user.role,
+    name: user.name,
+    workspaceId: user.workspaceId || DEFAULT_WORKSPACE_ID,
+    workspaceName: user.workspaceName || "PT Barbershop"
+  } : null;
+}
+
+function findLocalUser(id, password) {
+  return accountState.users.find((user) => user.id === String(id) && user.password === String(password));
+}
+
+function mergeAccountGroup(group, users = []) {
+  if (!group?.workspaceId) return;
+  accountState.groups = accountState.groups.filter((item) => item.workspaceId !== group.workspaceId);
+  accountState.groups.push(group);
+  users.forEach((user) => {
+    accountState.users = accountState.users.filter((item) => item.id !== user.id);
+    accountState.users.push(user);
+  });
+  saveAccountState();
+}
+
+function loadState(workspaceId = DEFAULT_WORKSPACE_ID) {
+  const key = workspaceStoreKey(workspaceId);
+  const saved = localStorage.getItem(key) || (workspaceId === DEFAULT_WORKSPACE_ID ? localStorage.getItem(STORE_KEY) : null);
+  if (!saved) return normalizeState({ ...structuredClone(defaultState), workspaceId });
 
   try {
-    return normalizeState({ ...structuredClone(defaultState), ...JSON.parse(saved) });
+    return normalizeState({ ...structuredClone(defaultState), ...JSON.parse(saved), workspaceId });
   } catch {
-    return structuredClone(defaultState);
+    return normalizeState({ ...structuredClone(defaultState), workspaceId });
   }
 }
 
 function normalizeState(nextState) {
   nextState.session = nextState.session?.role ? nextState.session : null;
   nextState.loggedIn = Boolean(nextState.session);
+  nextState.workspaceId = nextState.workspaceId || nextState.session?.workspaceId || DEFAULT_WORKSPACE_ID;
   nextState.invoiceCounter = Number(nextState.invoiceCounter || 0);
   nextState.staff = Array.isArray(nextState.staff) ? nextState.staff : structuredClone(defaultState.staff);
   nextState.services = Array.isArray(nextState.services) ? nextState.services : structuredClone(defaultState.services);
@@ -272,7 +406,8 @@ function normalizeState(nextState) {
 }
 
 function saveState() {
-  localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  state.workspaceId = activeWorkspaceId();
+  localStorage.setItem(workspaceStoreKey(state.workspaceId), JSON.stringify(state));
   if (cloudStarted && isLoggedIn() && !applyingRemoteState) {
     scheduleCloudSave();
   }
@@ -306,10 +441,12 @@ function hasBusinessData(data = businessState()) {
 function applyBusinessState(data) {
   const currentSession = state.session;
   const currentSelected = state.selectedServiceIds;
+  const currentWorkspaceId = activeWorkspaceId();
   applyingRemoteState = true;
   state = normalizeState({
     ...structuredClone(defaultState),
     ...data,
+    workspaceId: currentWorkspaceId,
     session: currentSession,
     loggedIn: Boolean(currentSession),
     selectedServiceIds: currentSelected
@@ -320,11 +457,11 @@ function applyBusinessState(data) {
 }
 
 function syncHeaders() {
-  const user = USERS.find((item) => item.id === state.session?.id);
+  const user = accountState.users.find((item) => item.id === state.session?.id);
   const headers = { "Content-Type": "application/json" };
-  if (user) {
-    headers["X-PT-User"] = user.id;
-    headers["X-PT-Password"] = user.password;
+  if (state.session) {
+    headers["X-PT-User"] = state.session.id;
+    headers["X-PT-Password"] = state.session.password || user?.password || "";
   }
   return headers;
 }
@@ -360,12 +497,15 @@ function logSecurity(action, detail = "", bill = null) {
 }
 
 function managerUser() {
-  return USERS.find((user) => user.role === "manager");
+  return accountState.users.find((user) => {
+    return user.role === "manager" && user.workspaceId === activeWorkspaceId();
+  });
 }
 
 function requestManagerApproval(actionText) {
   if (isManager()) {
     const manager = managerUser();
+    if (!manager) return null;
     return { id: manager.id, name: manager.name, password: manager.password };
   }
 
@@ -375,7 +515,7 @@ function requestManagerApproval(actionText) {
   if (password === null) return null;
 
   const manager = managerUser();
-  if (id.trim() !== manager.id || password !== manager.password) {
+  if (!manager || id.trim() !== manager.id || password !== manager.password) {
     alert("Mã Quản Lý không đúng. Bill chưa bị hủy.");
     logSecurity("Chặn hủy bill", `Sai mã Quản Lý khi ${actionText}`);
     saveState();
@@ -389,6 +529,50 @@ function requestManagerApproval(actionText) {
 async function fetchCloudState() {
   const response = await fetch(apiUrl("/api/state"), { headers: syncHeaders(), cache: "no-store" });
   if (!response.ok) throw new Error("Sync fetch failed");
+  return response.json();
+}
+
+async function cloudLogin(id, password) {
+  const response = await fetch(apiUrl("/api/login"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, password })
+  });
+  if (!response.ok) return null;
+  const payload = await response.json();
+  if (payload.user) {
+    mergeAccountGroup(payload.group, payload.users || [payload.user]);
+    return payload.user;
+  }
+  return null;
+}
+
+async function syncAccountGroups() {
+  if (!isManager()) return;
+  try {
+    const response = await fetch(apiUrl("/api/account-groups"), {
+      headers: syncHeaders(),
+      cache: "no-store"
+    });
+    if (!response.ok) return;
+    const payload = await response.json();
+    (payload.groups || []).forEach((group) => mergeAccountGroup(group, group.users || []));
+    renderAccountGroups();
+  } catch {
+    // Offline/static mode still uses account groups saved on this device.
+  }
+}
+
+async function createCloudAccountGroup(payload) {
+  const response = await fetch(apiUrl("/api/account-groups"), {
+    method: "POST",
+    headers: syncHeaders(),
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    const errorPayload = await response.json().catch(() => ({}));
+    throw new Error(errorPayload.error || "Không tạo được tài khoản online.");
+  }
   return response.json();
 }
 
@@ -540,9 +724,11 @@ function importBackupFile(file) {
       }
 
       const currentSession = state.session;
+      const currentWorkspaceId = activeWorkspaceId();
       state = normalizeState({
         ...structuredClone(defaultState),
         ...data,
+        workspaceId: currentWorkspaceId,
         session: currentSession,
         loggedIn: true,
         selectedServiceIds: []
@@ -702,7 +888,7 @@ function requireLogin() {
 }
 
 function setActiveTab(tabName) {
-  const managerTabs = new Set(["catalog", "staff"]);
+  const managerTabs = new Set(["catalog", "staff", "accounts"]);
   const safeTab = managerTabs.has(tabName) && !isManager() ? "order" : tabName;
 
   document.querySelectorAll(".tab-button").forEach((button) => {
@@ -714,7 +900,7 @@ function setActiveTab(tabName) {
 
 function renderPermissions() {
   const roleLabel = isManager() ? "Quản Lý" : "Thu Ngân";
-  $("#sessionLabel").textContent = state.session ? `${state.session.name} đang trực` : "Chưa đăng nhập";
+  $("#sessionLabel").textContent = state.session ? `${state.session.name} - ${state.session.workspaceName || "PT Barbershop"}` : "Chưa đăng nhập";
   $("#roleBadge").textContent = state.session ? roleLabel : "Guest";
   $("#roleBadge").classList.toggle("manager", isManager());
 
@@ -724,7 +910,7 @@ function renderPermissions() {
 
   if (!isManager()) {
     const activeButton = document.querySelector(".tab-button.is-active");
-    if (activeButton && ["catalog", "staff"].includes(activeButton.dataset.tab)) {
+    if (activeButton && ["catalog", "staff", "accounts"].includes(activeButton.dataset.tab)) {
       setActiveTab("order");
     }
   }
@@ -889,6 +1075,32 @@ function renderStaffList() {
   const isEditing = Boolean($("#staffId")?.value);
   const submit = $("#staffSubmitBtn");
   if (submit) submit.textContent = isEditing ? "Lưu nhân viên" : "Thêm nhân viên";
+}
+
+function renderAccountGroups() {
+  const container = $("#accountGroupList");
+  if (!container) return;
+  const groups = accountState.groups.slice().sort((a, b) => {
+    if (a.workspaceId === activeWorkspaceId()) return -1;
+    if (b.workspaceId === activeWorkspaceId()) return 1;
+    return String(a.workspaceName).localeCompare(String(b.workspaceName));
+  });
+
+  container.innerHTML = groups.map((group) => {
+    const manager = accountState.users.find((user) => user.workspaceId === group.workspaceId && user.role === "manager");
+    const cashier = accountState.users.find((user) => user.workspaceId === group.workspaceId && user.role === "cashier");
+    const current = group.workspaceId === activeWorkspaceId();
+    return `
+      <div class="summary-row">
+        <span>
+          <strong>${escapeHtml(group.workspaceName || "Bo tai khoan")}${current ? " (dang dung)" : ""}</strong>
+          <span class="row-meta">Quan Li: ${escapeHtml(manager?.id || group.managerId || "-")} / ${escapeHtml(manager?.password || "-")}</span>
+          <span class="row-meta">Thu Ngan: ${escapeHtml(cashier?.id || group.cashierId || "-")} / ${escapeHtml(cashier?.password || "-")}</span>
+        </span>
+        <strong>${escapeHtml(group.workspaceId)}</strong>
+      </div>
+    `;
+  }).join("");
 }
 
 function renderBillHistory() {
@@ -1095,6 +1307,7 @@ function renderAll() {
   renderQuickStats();
   renderCatalog();
   renderStaffList();
+  renderAccountGroups();
   renderBillHistory();
   renderShift();
   renderShiftLogs();
@@ -1356,6 +1569,57 @@ function closeShift(options = {}) {
   return report;
 }
 
+async function createAccountGroup(event) {
+  event.preventDefault();
+  if (!isManager()) {
+    alert("Chỉ Quản Lí mới được tạo tài khoản.");
+    return;
+  }
+
+  const workspaceName = $("#accountWorkspaceName").value.trim() || `Bo tai khoan ${accountState.groups.length + 1}`;
+  const managerId = $("#accountManagerId").value.trim();
+  const managerPassword = $("#accountManagerPassword").value.trim();
+  const cashierId = $("#accountCashierId").value.trim();
+  const cashierPassword = $("#accountCashierPassword").value.trim();
+
+  if (!managerId || !managerPassword || !cashierId || !cashierPassword) {
+    $("#accountStatus").textContent = "Hãy nhập đủ ID và mật khẩu cho Quản Lí / Thu Ngân.";
+    return;
+  }
+  if (managerId === cashierId) {
+    $("#accountStatus").textContent = "ID Quản Lí và ID Thu Ngân phải khác nhau.";
+    return;
+  }
+  if (accountState.users.some((user) => user.id === managerId || user.id === cashierId)) {
+    $("#accountStatus").textContent = "ID này đã tồn tại. Hãy chọn ID khác.";
+    return;
+  }
+
+  const payload = { workspaceName, managerId, managerPassword, cashierId, cashierPassword };
+  let created = null;
+  try {
+    created = await createCloudAccountGroup(payload);
+  } catch {
+    const workspaceId = `pt-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 6)}`;
+    created = {
+      online: false,
+      group: { workspaceId, workspaceName, managerId, cashierId, createdAt: new Date().toISOString() },
+      users: [
+        { id: managerId, password: managerPassword, role: "manager", name: `Quan Li ${workspaceName}`, workspaceId, workspaceName },
+        { id: cashierId, password: cashierPassword, role: "cashier", name: `Thu Ngan ${workspaceName}`, workspaceId, workspaceName }
+      ]
+    };
+  }
+
+  mergeAccountGroup(created.group, created.users || []);
+  event.target.reset();
+  renderAccountGroups();
+  $("#accountStatus").textContent = created.online === false
+    ? "Đã tạo trên máy này. Muốn máy khác dùng chung, hãy chạy bản Render có database."
+    : "Đã tạo bộ tài khoản riêng. Mỗi bộ có doanh thu và bill riêng.";
+  showToast("Đã tạo bộ tài khoản");
+}
+
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({
     "&": "&amp;",
@@ -1366,20 +1630,28 @@ function escapeHtml(value) {
   }[char]));
 }
 
-$("#loginForm").addEventListener("submit", (event) => {
+$("#loginForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const id = $("#loginId").value.trim();
   const password = $("#loginPassword").value;
-  const user = USERS.find((item) => item.id === id && item.password === password);
+  let user = findLocalUser(id, password);
+  if (!user) {
+    user = await cloudLogin(id, password).catch(() => null);
+  }
 
   if (user) {
-    state.session = { id: user.id, role: user.role, name: user.name };
+    const session = publicUser(user);
+    state = loadState(session.workspaceId);
+    state.session = session;
     state.loggedIn = true;
+    state.workspaceId = session.workspaceId;
     $("#loginError").textContent = "";
+    saveSession(session);
     saveState();
     renderAll();
     setActiveTab("order");
     startCloudSync();
+    syncAccountGroups();
     return;
   }
   $("#loginError").textContent = "Sai ID hoặc mật khẩu.";
@@ -1390,6 +1662,7 @@ $("#logoutBtn").addEventListener("click", () => {
   cloudStarted = false;
   state.session = null;
   state.loggedIn = false;
+  saveSession(null);
   saveState();
   renderAll();
   setSyncStatus("Chưa đăng nhập", false);
@@ -1583,6 +1856,7 @@ $("#backupFileInput").addEventListener("change", (event) => {
   event.target.value = "";
 });
 
+$("#accountGroupForm").addEventListener("submit", createAccountGroup);
 $("#resetOrderBtn").addEventListener("click", resetOrder);
 $("#cancelCurrentBillBtn").addEventListener("click", clearSelectedServices);
 $("#saveBillBtn").addEventListener("click", printPaymentBill);
@@ -1603,6 +1877,7 @@ window.addEventListener("appinstalled", () => {
 
 renderAll();
 startCloudSync();
+syncAccountGroups();
 updateInstallButton();
 
 if ("serviceWorker" in navigator) {

@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="vi">
   <head>
     <meta charset="utf-8">
@@ -22,25 +22,25 @@
         <div class="login-art" aria-hidden="true">
           <img src="assets/logo.jpg" alt="">
           <div>
-            <p class="eyebrow">Barbershop cao cấp</p>
+            <p class="eyebrow">Barbershop cao cáº¥p</p>
             <h1>PT Barbershop</h1>
-            <p class="login-copy">Order, bill, chia doanh thu và kết ca trong một màn hình gọn gàng.</p>
+            <p class="login-copy">Order, bill, chia doanh thu vÃ  káº¿t ca trong má»™t mÃ n hÃ¬nh gá»n gÃ ng.</p>
           </div>
         </div>
         <form id="loginForm" class="login-form">
           <div class="login-title">
-            <p class="eyebrow">Đăng nhập hệ thống</p>
-            <h2>Nhập tài khoản</h2>
+            <p class="eyebrow">ÄÄƒng nháº­p há»‡ thá»‘ng</p>
+            <h2>Nháº­p tÃ i khoáº£n</h2>
           </div>
           <label>
             ID
-            <input id="loginId" inputmode="numeric" autocomplete="username" placeholder="Nhập ID">
+            <input id="loginId" inputmode="numeric" autocomplete="username" placeholder="Nháº­p ID">
           </label>
           <label>
-            Mật khẩu
-            <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Nhập mật khẩu">
+            Máº­t kháº©u
+            <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Nháº­p máº­t kháº©u">
           </label>
-          <button type="submit" class="primary-button">Đăng nhập</button>
+          <button type="submit" class="primary-button">ÄÄƒng nháº­p</button>
           <p id="loginError" class="form-error" role="alert"></p>
         </form>
       </section>
@@ -52,42 +52,43 @@
           <img src="assets/logo.jpg" alt="">
           <div>
             <strong>PT Barbershop</strong>
-            <span id="sessionLabel">Chưa đăng nhập</span>
+            <span id="sessionLabel">ChÆ°a Ä‘Äƒng nháº­p</span>
           </div>
         </div>
         <div id="roleBadge" class="role-badge">Guest</div>
         <nav class="nav-tabs" aria-label="Dieu huong">
           <button class="tab-button is-active" data-tab="order">Order & Bill</button>
-          <button class="tab-button" data-tab="catalog" data-manager-only>Bảng giá & %</button>
-          <button class="tab-button" data-tab="staff" data-manager-only>Nhân viên</button>
-          <button class="tab-button" data-tab="shift">Đầu ca / Kết ca</button>
+          <button class="tab-button" data-tab="catalog" data-manager-only>Báº£ng giÃ¡ & %</button>
+          <button class="tab-button" data-tab="staff" data-manager-only>NhÃ¢n viÃªn</button>
+          <button class="tab-button" data-tab="accounts" data-manager-only>T&#224;i kho&#7843;n</button>
+          <button class="tab-button" data-tab="shift">Äáº§u ca / Káº¿t ca</button>
         </nav>
-        <button id="logoutBtn" class="ghost-button sidebar-logout">Đăng xuất</button>
+        <button id="logoutBtn" class="ghost-button sidebar-logout">ÄÄƒng xuáº¥t</button>
       </aside>
 
       <section class="main-content">
         <header class="topbar">
           <div>
-            <p class="eyebrow">Ngày làm việc</p>
+            <p class="eyebrow">NgÃ y lÃ m viá»‡c</p>
             <h2 id="todayLabel">Order</h2>
           </div>
           <button id="installAppBtn" class="ghost-button install-button" type="button">C&#224;i app</button>
           <div class="status-grid">
             <div class="status-pill">
-              <span>Ca hiện tại</span>
-              <strong id="shiftStatus">Chưa mở ca</strong>
+              <span>Ca hiá»‡n táº¡i</span>
+              <strong id="shiftStatus">ChÆ°a má»Ÿ ca</strong>
             </div>
             <div class="status-pill">
-              <span>Tiền dự kiến</span>
+              <span>Tiá»n dá»± kiáº¿n</span>
               <strong id="cashStatus">0 VND</strong>
             </div>
             <div class="status-pill">
-              <span>Thanh toÃ¡n ca</span>
+              <span>Thanh toÃƒÂ¡n ca</span>
               <strong id="paymentStatus">0 VND</strong>
             </div>
             <div class="status-pill">
-              <span>Đồng bộ</span>
-              <strong id="syncStatus">Đang kiểm tra</strong>
+              <span>Äá»“ng bá»™</span>
+              <strong id="syncStatus">Äang kiá»ƒm tra</strong>
             </div>
           </div>
         </header>
@@ -98,31 +99,31 @@
             <section class="panel order-info-panel">
               <div class="panel-head">
                 <div>
-                  <p class="eyebrow">Tạo bill</p>
-                  <h3>Thông tin khách</h3>
+                  <p class="eyebrow">Táº¡o bill</p>
+                  <h3>ThÃ´ng tin khÃ¡ch</h3>
                 </div>
-                <button id="resetOrderBtn" class="ghost-button" title="Làm mới bill" aria-label="Làm mới bill">Làm mới</button>
+                <button id="resetOrderBtn" class="ghost-button" title="LÃ m má»›i bill" aria-label="LÃ m má»›i bill">LÃ m má»›i</button>
               </div>
               <div class="field-grid">
-                <label>Tên khách
-                  <input id="customerName" placeholder="Khách lẻ">
+                <label>TÃªn khÃ¡ch
+                  <input id="customerName" placeholder="KhÃ¡ch láº»">
                 </label>
-                <label>Số điện thoại
+                <label>Sá»‘ Ä‘iá»‡n thoáº¡i
                   <input id="customerPhone" inputmode="tel" autocomplete="tel" placeholder="VD: 0901234567">
                 </label>
-                <label>Nhân viên cắt/làm
+                <label>NhÃ¢n viÃªn cáº¯t/lÃ m
                   <select id="orderStaff"></select>
                 </label>
-                <label>Thanh toán
+                <label>Thanh toÃ¡n
                   <select id="paymentMethod">
-                    <option value="cash">Tiền mặt</option>
-                    <option value="transfer">Chuyển khoản</option>
-                    <option value="card">Thẻ</option>
-                    <option value="other">Khác</option>
+                    <option value="cash">Tiá»n máº·t</option>
+                    <option value="transfer">Chuyá»ƒn khoáº£n</option>
+                    <option value="card">Tháº»</option>
+                    <option value="other">KhÃ¡c</option>
                   </select>
                 </label>
-                <label>Ghi chú
-                  <input id="orderNote" placeholder="Ví dụ: yêu cầu nhẹ tay">
+                <label>Ghi chÃº
+                  <input id="orderNote" placeholder="VÃ­ dá»¥: yÃªu cáº§u nháº¹ tay">
                 </label>
               </div>
             </section>
@@ -130,8 +131,8 @@
             <section class="panel service-picker">
               <div class="panel-head">
                 <div>
-                  <p class="eyebrow">Menu dịch vụ</p>
-                  <h3>Cắt, uốn, nhuộm và chăm sóc</h3>
+                  <p class="eyebrow">Menu dá»‹ch vá»¥</p>
+                  <h3>Cáº¯t, uá»‘n, nhuá»™m vÃ  chÄƒm sÃ³c</h3>
                 </div>
               </div>
               <div id="serviceGroups" class="service-groups"></div>
@@ -140,8 +141,8 @@
             <section class="panel bill-panel">
               <div class="panel-head">
                 <div>
-                  <p class="eyebrow">Hóa đơn</p>
-                  <h3>Bill hiện tại</h3>
+                  <p class="eyebrow">HÃ³a Ä‘Æ¡n</p>
+                  <h3>Bill hiá»‡n táº¡i</h3>
                 </div>
               </div>
               <div id="billPreview" class="bill-preview"></div>
@@ -155,14 +156,14 @@
           <section class="panel">
             <div class="panel-head">
               <div>
-                <p class="eyebrow">Lịch sử bill</p>
+                <p class="eyebrow">Lá»‹ch sá»­ bill</p>
                 <h3 id="historyTitle">Bill trong ca</h3>
               </div>
               <div class="history-tools">
                 <label class="search-field">T&#236;m s&#7889; h&#243;a &#273;&#417;n
                   <input id="billSearch" placeholder="VD: HD000001">
                 </label>
-                <span id="historyScope" class="scope-badge">Đơn hủy vẫn được lưu</span>
+                <span id="historyScope" class="scope-badge">ÄÆ¡n há»§y váº«n Ä‘Æ°á»£c lÆ°u</span>
               </div>
             </div>
             <div class="table-wrap history-table-wrap">
@@ -170,15 +171,15 @@
                 <thead>
                   <tr>
                     <th>S&#7889; H&#272; / STT</th>
-                    <th>Giờ</th>
-                    <th>Khách</th>
-                    <th>Nhân viên</th>
-                    <th>Dịch vụ</th>
-                    <th>Trạng thái</th>
-                    <th>Thanh toán</th>
-                    <th>Tổng</th>
+                    <th>Giá»</th>
+                    <th>KhÃ¡ch</th>
+                    <th>NhÃ¢n viÃªn</th>
+                    <th>Dá»‹ch vá»¥</th>
+                    <th>Tráº¡ng thÃ¡i</th>
+                    <th>Thanh toÃ¡n</th>
+                    <th>Tá»•ng</th>
                     <th data-manager-only>Chia NV</th>
-                    <th>Thao tác</th>
+                    <th>Thao tÃ¡c</th>
                   </tr>
                 </thead>
                 <tbody id="billHistory"></tbody>
@@ -193,37 +194,37 @@
             <section class="panel">
               <div class="panel-head">
                 <div>
-                  <p class="eyebrow">Quản lý</p>
-                  <h3>Giá và phần trăm chia</h3>
+                  <p class="eyebrow">Quáº£n lÃ½</p>
+                  <h3>GiÃ¡ vÃ  pháº§n trÄƒm chia</h3>
                 </div>
               </div>
               <form id="serviceForm" class="stack-form">
                 <input id="serviceId" type="hidden">
-                <label>Loại
+                <label>Loáº¡i
                   <select id="serviceCategory">
-                    <option value="cut">Cắt</option>
-                    <option value="perm">Uốn</option>
-                    <option value="color">Nhuộm</option>
-                    <option value="extra">Dịch vụ</option>
+                    <option value="cut">Cáº¯t</option>
+                    <option value="perm">Uá»‘n</option>
+                    <option value="color">Nhuá»™m</option>
+                    <option value="extra">Dá»‹ch vá»¥</option>
                   </select>
                 </label>
-                <label>Tên dịch vụ
-                  <input id="serviceName" placeholder="Ví dụ: player, phồng, hồng phấn">
+                <label>TÃªn dá»‹ch vá»¥
+                  <input id="serviceName" placeholder="VÃ­ dá»¥: player, phá»“ng, há»“ng pháº¥n">
                 </label>
                 <label>Gia
                   <input id="servicePrice" type="number" min="0" step="1000" placeholder="80000">
                 </label>
-                <label>% chia cho nhân viên
+                <label>% chia cho nhÃ¢n viÃªn
                   <input id="serviceCommission" type="number" min="0" max="100" step="1" placeholder="30">
                 </label>
-                <button type="submit" class="primary-button">Lưu dịch vụ</button>
+                <button type="submit" class="primary-button">LÆ°u dá»‹ch vá»¥</button>
               </form>
             </section>
             <section class="panel">
               <div class="panel-head">
                 <div>
-                  <p class="eyebrow">Bảng giá</p>
-                  <h3>Quản lý từng dịch vụ</h3>
+                  <p class="eyebrow">Báº£ng giÃ¡</p>
+                  <h3>Quáº£n lÃ½ tá»«ng dá»‹ch vá»¥</h3>
                 </div>
               </div>
               <div id="catalogList" class="catalog-list"></div>
@@ -236,26 +237,69 @@
             <section class="panel">
               <div class="panel-head">
                 <div>
-                  <p class="eyebrow">Nhân sự</p>
-                  <h3>Thêm nhân viên</h3>
+                  <p class="eyebrow">NhÃ¢n sá»±</p>
+                  <h3>ThÃªm nhÃ¢n viÃªn</h3>
                 </div>
               </div>
               <form id="staffForm" class="stack-form">
                 <input id="staffId" type="hidden">
-                <label>Tên nhân viên
-                  <input id="staffName" placeholder="Nhân viên A">
+                <label>TÃªn nhÃ¢n viÃªn
+                  <input id="staffName" placeholder="NhÃ¢n viÃªn A">
                 </label>
-                <button id="staffSubmitBtn" type="submit" class="primary-button">Thêm nhân viên</button>
+                <button id="staffSubmitBtn" type="submit" class="primary-button">ThÃªm nhÃ¢n viÃªn</button>
               </form>
             </section>
             <section class="panel">
               <div class="panel-head">
                 <div>
-                  <p class="eyebrow">Danh sách</p>
-                  <h3>Nhân viên cắt/làm</h3>
+                  <p class="eyebrow">Danh sÃ¡ch</p>
+                  <h3>NhÃ¢n viÃªn cáº¯t/lÃ m</h3>
                 </div>
               </div>
               <div id="staffList" class="staff-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="tab-accounts" class="tab-panel is-hidden" data-manager-only>
+          <div class="two-col">
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Ph&#226;n quy&#7873;n</p>
+                  <h3>T&#7841;o b&#7897; t&#224;i kho&#7843;n ri&#234;ng</h3>
+                </div>
+              </div>
+              <form id="accountGroupForm" class="stack-form">
+                <label>T&#234;n b&#7897; / chi nh&#225;nh
+                  <input id="accountWorkspaceName" placeholder="VD: Thu ngan 2">
+                </label>
+                <div class="field-grid">
+                  <label>ID Qu&#7843;n L&#237;
+                    <input id="accountManagerId" inputmode="numeric" placeholder="VD: 993901">
+                  </label>
+                  <label>M&#7853;t kh&#7849;u Qu&#7843;n L&#237;
+                    <input id="accountManagerPassword" placeholder="VD: 040426">
+                  </label>
+                  <label>ID Thu Ng&#226;n
+                    <input id="accountCashierId" inputmode="numeric" placeholder="VD: 312201">
+                  </label>
+                  <label>M&#7853;t kh&#7849;u Thu Ng&#226;n
+                    <input id="accountCashierPassword" placeholder="VD: 152004">
+                  </label>
+                </div>
+                <button type="submit" class="primary-button">T&#7841;o b&#7897; t&#224;i kho&#7843;n</button>
+                <p id="accountStatus" class="backup-status">M&#7895;i b&#7897; c&#243; bill, doanh thu v&#224; k&#7871;t ca ri&#234;ng.</p>
+              </form>
+            </section>
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Danh s&#225;ch</p>
+                  <h3>B&#7897; t&#224;i kho&#7843;n</h3>
+                </div>
+              </div>
+              <div id="accountGroupList" class="summary-list"></div>
             </section>
           </div>
         </section>
@@ -265,29 +309,29 @@
             <section class="panel">
               <div class="panel-head">
                 <div>
-                  <p class="eyebrow">Đầu ca</p>
-                  <h3>Mở ca thu ngân</h3>
+                  <p class="eyebrow">Äáº§u ca</p>
+                  <h3>Má»Ÿ ca thu ngÃ¢n</h3>
                 </div>
               </div>
               <form id="openShiftForm" class="stack-form">
-                <label>Tiền đầu ca
+                <label>Tiá»n Ä‘áº§u ca
                   <input id="openingCash" type="number" min="0" step="1000" placeholder="0">
                 </label>
-                <button type="submit" class="primary-button">Nhập đầu ca</button>
+                <button type="submit" class="primary-button">Nháº­p Ä‘áº§u ca</button>
               </form>
               <form id="closeShiftForm" class="stack-form divider">
-                <label>Tiền thực tế kết ca
+                <label>Tiá»n thá»±c táº¿ káº¿t ca
                   <input id="closingCash" type="number" min="0" step="1000" placeholder="0">
                 </label>
-                <button type="submit" class="primary-button">Kết ca</button>
-                <button id="printShiftBtn" type="button" class="ghost-button">In kết ca</button>
+                <button type="submit" class="primary-button">Káº¿t ca</button>
+                <button id="printShiftBtn" type="button" class="ghost-button">In káº¿t ca</button>
               </form>
             </section>
             <section class="panel">
               <div class="panel-head">
                 <div>
-                  <p class="eyebrow">Báo cáo ca</p>
-                  <h3>Tổng kết rõ ràng</h3>
+                  <p class="eyebrow">BÃ¡o cÃ¡o ca</p>
+                  <h3>Tá»•ng káº¿t rÃµ rÃ ng</h3>
                 </div>
               </div>
               <div id="shiftSummary" class="summary-list"></div>
@@ -296,23 +340,23 @@
           <section class="panel" data-manager-only>
             <div class="panel-head">
               <div>
-                <p class="eyebrow">Quản lý ca</p>
-                <h3>Lịch sử kết ca</h3>
+                <p class="eyebrow">Quáº£n lÃ½ ca</p>
+                <h3>Lá»‹ch sá»­ káº¿t ca</h3>
               </div>
             </div>
             <div class="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Người trực</th>
-                    <th>Mở ca</th>
-                    <th>Kết ca</th>
-                    <th>Đầu ca</th>
+                    <th>NgÆ°á»i trá»±c</th>
+                    <th>Má»Ÿ ca</th>
+                    <th>Káº¿t ca</th>
+                    <th>Äáº§u ca</th>
                     <th>Doanh thu</th>
-                    <th>Đơn hủy</th>
-                    <th>Dự kiến</th>
-                    <th>Thực tế</th>
-                    <th>Chênh lệch</th>
+                    <th>ÄÆ¡n há»§y</th>
+                    <th>Dá»± kiáº¿n</th>
+                    <th>Thá»±c táº¿</th>
+                    <th>ChÃªnh lá»‡ch</th>
                   </tr>
                 </thead>
                 <tbody id="shiftLogBody"></tbody>
@@ -322,20 +366,20 @@
           <section class="panel" data-manager-only>
             <div class="panel-head">
               <div>
-                <p class="eyebrow">Bảo mật</p>
-                <h3>Nhật ký chống đá bill</h3>
+                <p class="eyebrow">Báº£o máº­t</p>
+                <h3>Nháº­t kÃ½ chá»‘ng Ä‘Ã¡ bill</h3>
               </div>
-              <span class="scope-badge">Bill đã lưu không thể xóa khỏi hệ thống</span>
+              <span class="scope-badge">Bill Ä‘Ã£ lÆ°u khÃ´ng thá»ƒ xÃ³a khá»i há»‡ thá»‘ng</span>
             </div>
             <div class="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Thời gian</th>
-                    <th>Người thao tác</th>
-                    <th>Hạng mục</th>
-                    <th>Hóa đơn</th>
-                    <th>Chi tiết</th>
+                    <th>Thá»i gian</th>
+                    <th>NgÆ°á»i thao tÃ¡c</th>
+                    <th>Háº¡ng má»¥c</th>
+                    <th>HÃ³a Ä‘Æ¡n</th>
+                    <th>Chi tiáº¿t</th>
                   </tr>
                 </thead>
                 <tbody id="securityLogBody"></tbody>
@@ -370,3 +414,4 @@
     <script src="app.js"></script>
   </body>
 </html>
+

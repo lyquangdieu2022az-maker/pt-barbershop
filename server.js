@@ -1,10 +1,17 @@
 const express = require("express");
 const path = require("path");
+const { randomUUID } = require("crypto");
 const { Pool } = require("pg");
 
 const app = express();
 const port = process.env.PORT || 3000;
 const outputsDir = path.join(__dirname, "outputs");
+const DEFAULT_WORKSPACE_ID = "pt-main";
+
+const defaultUsers = new Map([
+  ["9939", { password: "040426", role: "manager", name: "Quan Li", workspaceId: DEFAULT_WORKSPACE_ID, workspaceName: "PT Barbershop" }],
+  ["3122", { password: "152004", role: "cashier", name: "Thu Ngan", workspaceId: DEFAULT_WORKSPACE_ID, workspaceName: "PT Barbershop" }]
+]);
 
 const users = new Map([
   ["9939", { password: "040426", role: "manager", name: "Quản Lý" }],
@@ -44,23 +51,56 @@ app.use((req, res, next) => {
   next();
 });
 
-function requireAuth(req, res, next) {
+function publicUser(user) {
+  return user ? {
+    id: user.id,
+    password: user.password,
+    role: user.role,
+    name: user.name,
+    workspaceId: user.workspaceId || DEFAULT_WORKSPACE_ID,
+    workspaceName: user.workspaceName || "PT Barbershop"
+  } : null;
+}
+
+async function findUser(id, password) {
+  const fallback = defaultUsers.get(String(id));
+  if (!pool) {
+    return fallback && fallback.password === String(password) ? { id: String(id), ...fallback } : null;
+  }
+  await ensureDb();
+  const result = await pool.query(
+    "SELECT id, password, role, name, workspace_id, workspace_name FROM app_users WHERE id = $1 AND password = $2",
+    [String(id), String(password)]
+  );
+  if (!result.rows.length) return null;
+  const row = result.rows[0];
+  return {
+    id: row.id,
+    password: row.password,
+    role: row.role,
+    name: row.name,
+    workspaceId: row.workspace_id,
+    workspaceName: row.workspace_name
+  };
+}
+
+async function requireAuth(req, res, next) {
   const id = String(req.get("X-PT-User") || "");
   const password = String(req.get("X-PT-Password") || "");
-  const user = users.get(id);
-  if (!user || user.password !== password) {
+  const user = await findUser(id, password).catch(() => null);
+  if (!user) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
-  req.user = { id, ...user };
+  req.user = user;
   next();
 }
 
-function managerApproved(req) {
+async function managerApproved(req) {
   const id = String(req.get("X-PT-Manager-User") || "");
   const password = String(req.get("X-PT-Manager-Password") || "");
-  const user = users.get(id);
-  return Boolean(user && user.role === "manager" && user.password === password);
+  const user = await findUser(id, password).catch(() => null);
+  return Boolean(user && user.role === "manager" && user.workspaceId === req.user.workspaceId);
 }
 
 function stableStringify(value) {
@@ -129,7 +169,7 @@ function requireCashierSafeUpdate(previous, next, req) {
     if (newBill.status !== oldBill.status) {
       const isCancel = oldBill.status !== "canceled" && newBill.status === "canceled";
       if (!isCancel) throw securityError(`Bảo mật: Trạng thái bill ${oldBill.invoiceNo || oldBill.id} không hợp lệ.`);
-      if (!managerApproved(req)) {
+      if (!req.managerApproved) {
         throw securityError("Bảo mật: Hủy bill cần Quản Lý duyệt.");
       }
       if (!String(newBill.cancelReason || "").trim()) {
@@ -178,12 +218,64 @@ async function ensureDb() {
   }
   if (dbReady) return;
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS app_state (
-      id integer PRIMARY KEY DEFAULT 1,
+    CREATE TABLE IF NOT EXISTS account_groups (
+      workspace_id text PRIMARY KEY,
+      workspace_name text NOT NULL,
+      manager_id text NOT NULL,
+      cashier_id text NOT NULL,
+      created_by text,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS app_users (
+      id text PRIMARY KEY,
+      password text NOT NULL,
+      role text NOT NULL CHECK (role IN ('manager', 'cashier')),
+      name text NOT NULL,
+      workspace_id text NOT NULL REFERENCES account_groups(workspace_id) ON DELETE CASCADE,
+      workspace_name text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS workspace_states (
+      workspace_id text PRIMARY KEY REFERENCES account_groups(workspace_id) ON DELETE CASCADE,
       data jsonb NOT NULL,
       updated_at timestamptz NOT NULL DEFAULT now()
     )
   `);
+  await pool.query(
+    `
+      INSERT INTO account_groups (workspace_id, workspace_name, manager_id, cashier_id, created_by)
+      VALUES ($1, 'PT Barbershop', '9939', '3122', 'system')
+      ON CONFLICT (workspace_id) DO NOTHING
+    `,
+    [DEFAULT_WORKSPACE_ID]
+  );
+  for (const [id, user] of defaultUsers.entries()) {
+    await pool.query(
+      `
+        INSERT INTO app_users (id, password, role, name, workspace_id, workspace_name)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (id) DO NOTHING
+      `,
+      [id, user.password, user.role, user.name, user.workspaceId, user.workspaceName]
+    );
+  }
+  const legacyTable = await pool.query("SELECT to_regclass('public.app_state') AS table_name");
+  if (legacyTable.rows[0]?.table_name) {
+    const existing = await pool.query("SELECT workspace_id FROM workspace_states WHERE workspace_id = $1", [DEFAULT_WORKSPACE_ID]);
+    if (!existing.rows.length) {
+      const legacy = await pool.query("SELECT data FROM app_state WHERE id = 1");
+      if (legacy.rows.length) {
+        await pool.query(
+          "INSERT INTO workspace_states (workspace_id, data, updated_at) VALUES ($1, $2::jsonb, now()) ON CONFLICT (workspace_id) DO NOTHING",
+          [DEFAULT_WORKSPACE_ID, JSON.stringify(legacy.rows[0].data)]
+        );
+      }
+    }
+  }
   dbReady = true;
 }
 
@@ -191,10 +283,153 @@ app.get("/health", (req, res) => {
   res.json({ ok: true });
 });
 
+app.post("/api/login", async (req, res, next) => {
+  try {
+    const id = String(req.body?.id || "");
+    const password = String(req.body?.password || "");
+    const user = await findUser(id, password);
+    if (!user) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    let group = {
+      workspaceId: user.workspaceId,
+      workspaceName: user.workspaceName,
+      managerId: user.role === "manager" ? user.id : "",
+      cashierId: user.role === "cashier" ? user.id : "",
+      createdAt: ""
+    };
+    let usersInWorkspace = [publicUser(user)];
+    if (pool) {
+      const groupResult = await pool.query(
+        "SELECT workspace_id, workspace_name, manager_id, cashier_id, created_at FROM account_groups WHERE workspace_id = $1",
+        [user.workspaceId]
+      );
+      if (groupResult.rows.length) {
+        const row = groupResult.rows[0];
+        group = {
+          workspaceId: row.workspace_id,
+          workspaceName: row.workspace_name,
+          managerId: row.manager_id,
+          cashierId: row.cashier_id,
+          createdAt: row.created_at?.toISOString?.() || ""
+        };
+      }
+      const usersResult = await pool.query(
+        "SELECT id, password, role, name, workspace_id, workspace_name FROM app_users WHERE workspace_id = $1",
+        [user.workspaceId]
+      );
+      usersInWorkspace = usersResult.rows.map((row) => publicUser({
+        id: row.id,
+        password: row.password,
+        role: row.role,
+        name: row.name,
+        workspaceId: row.workspace_id,
+        workspaceName: row.workspace_name
+      }));
+    }
+    res.json({
+      user: publicUser(user),
+      group,
+      users: usersInWorkspace
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/account-groups", requireAuth, async (req, res, next) => {
+  try {
+    if (req.user.role !== "manager") {
+      res.status(403).json({ error: "Only manager can view accounts" });
+      return;
+    }
+    await ensureDb();
+    const groups = await pool.query("SELECT workspace_id, workspace_name, manager_id, cashier_id, created_at FROM account_groups ORDER BY created_at ASC");
+    const usersResult = await pool.query("SELECT id, password, role, name, workspace_id, workspace_name FROM app_users ORDER BY created_at ASC");
+    const usersByWorkspace = new Map();
+    usersResult.rows.forEach((row) => {
+      const workspaceUsers = usersByWorkspace.get(row.workspace_id) || [];
+      workspaceUsers.push(publicUser({
+        id: row.id,
+        password: row.password,
+        role: row.role,
+        name: row.name,
+        workspaceId: row.workspace_id,
+        workspaceName: row.workspace_name
+      }));
+      usersByWorkspace.set(row.workspace_id, workspaceUsers);
+    });
+    res.set("Cache-Control", "no-store");
+    res.json({
+      groups: groups.rows.map((row) => ({
+        workspaceId: row.workspace_id,
+        workspaceName: row.workspace_name,
+        managerId: row.manager_id,
+        cashierId: row.cashier_id,
+        createdAt: row.created_at?.toISOString?.() || "",
+        users: usersByWorkspace.get(row.workspace_id) || []
+      }))
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/account-groups", requireAuth, async (req, res, next) => {
+  try {
+    if (req.user.role !== "manager") {
+      res.status(403).json({ error: "Only manager can create accounts" });
+      return;
+    }
+    await ensureDb();
+    const workspaceName = String(req.body?.workspaceName || "").trim() || "PT Barbershop";
+    const managerId = String(req.body?.managerId || "").trim();
+    const managerPassword = String(req.body?.managerPassword || "").trim();
+    const cashierId = String(req.body?.cashierId || "").trim();
+    const cashierPassword = String(req.body?.cashierPassword || "").trim();
+    if (!managerId || !managerPassword || !cashierId || !cashierPassword || managerId === cashierId) {
+      res.status(400).json({ error: "Invalid account data" });
+      return;
+    }
+    const exists = await pool.query("SELECT id FROM app_users WHERE id = ANY($1::text[])", [[managerId, cashierId]]);
+    if (exists.rows.length) {
+      res.status(409).json({ error: "ID already exists" });
+      return;
+    }
+    const workspaceId = `pt-${randomUUID()}`;
+    const group = { workspaceId, workspaceName, managerId, cashierId, createdAt: new Date().toISOString() };
+    const users = [
+      { id: managerId, password: managerPassword, role: "manager", name: `Quan Li ${workspaceName}`, workspaceId, workspaceName },
+      { id: cashierId, password: cashierPassword, role: "cashier", name: `Thu Ngan ${workspaceName}`, workspaceId, workspaceName }
+    ];
+    await pool.query("BEGIN");
+    try {
+      await pool.query(
+        "INSERT INTO account_groups (workspace_id, workspace_name, manager_id, cashier_id, created_by) VALUES ($1, $2, $3, $4, $5)",
+        [workspaceId, workspaceName, managerId, cashierId, req.user.id]
+      );
+      for (const user of users) {
+        await pool.query(
+          "INSERT INTO app_users (id, password, role, name, workspace_id, workspace_name) VALUES ($1, $2, $3, $4, $5, $6)",
+          [user.id, user.password, user.role, user.name, workspaceId, workspaceName]
+        );
+      }
+      await pool.query("COMMIT");
+    } catch (error) {
+      await pool.query("ROLLBACK");
+      throw error;
+    }
+    res.status(201).json({ online: true, group, users });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get("/api/state", requireAuth, async (req, res, next) => {
   try {
     await ensureDb();
-    const result = await pool.query("SELECT data, updated_at FROM app_state WHERE id = 1");
+    const result = await pool.query("SELECT data, updated_at FROM workspace_states WHERE workspace_id = $1", [req.user.workspaceId]);
     res.set("Cache-Control", "no-store");
     if (!result.rows.length) {
       res.json({ data: null, updatedAt: null });
@@ -217,20 +452,21 @@ app.post("/api/state", requireAuth, async (req, res, next) => {
       res.status(400).json({ error: "Invalid state payload" });
       return;
     }
-    const previousResult = await pool.query("SELECT data FROM app_state WHERE id = 1");
+    const previousResult = await pool.query("SELECT data FROM workspace_states WHERE workspace_id = $1", [req.user.workspaceId]);
     const previous = previousResult.rows[0]?.data || null;
     if (req.user.role !== "manager") {
+      req.managerApproved = await managerApproved(req);
       requireCashierSafeUpdate(previous, data, req);
     }
     const result = await pool.query(
       `
-        INSERT INTO app_state (id, data, updated_at)
-        VALUES (1, $1::jsonb, now())
-        ON CONFLICT (id)
+        INSERT INTO workspace_states (workspace_id, data, updated_at)
+        VALUES ($1, $2::jsonb, now())
+        ON CONFLICT (workspace_id)
         DO UPDATE SET data = EXCLUDED.data, updated_at = now()
         RETURNING updated_at
       `,
-      [JSON.stringify(data)]
+      [req.user.workspaceId, JSON.stringify(data)]
     );
     res.set("Cache-Control", "no-store");
     res.json({ ok: true, updatedAt: result.rows[0].updated_at.toISOString() });
