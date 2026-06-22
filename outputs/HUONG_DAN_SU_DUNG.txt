@@ -15,7 +15,13 @@ HUONG DAN SU DUNG PT BARBERSHOP POS
 - Bam Share, chon Add to Home Screen.
 - Sau khi mo mot lan, app co the chay lai tu cache offline neu trinh duyet da luu du.
 
-4. Sao luu va doi may
+4. Cai thanh app tren dien thoai
+- Android: mo link HTTPS bang Chrome, bam nut Cai app trong web hoac bam menu Chrome, chon Cai dat ung dung / Them vao man hinh chinh.
+- iPhone: mo link HTTPS bang Safari, bam nut Chia se, chon Them vao Man hinh chinh.
+- Sau khi cai, dien thoai se co icon PT Barber va mo toan man hinh nhu app.
+- Day la cach mien phi, khong can tai khoan App Store hoac CH Play.
+
+5. Sao luu va doi may
 - Khong can lam lai bo web khi doi may.
 - Hay giu lai file ZIP web va file sao luu JSON.
 - Dang nhap Quan Li.
@@ -25,13 +31,13 @@ HUONG DAN SU DUNG PT BARBERSHOP POS
 - File sao luu chua bang gia, nhan vien, bill, don huy, ca dang lam va lich su ket ca.
 - Neu may tinh da setup nhan vien/bang gia/dau ca ma dien thoai vao van nhu ban dau, do la vi du lieu dang luu rieng theo tung thiet bi. Hay tai file sao luu o may tinh roi nhap file sao luu tren dien thoai.
 
-5. Luu y ve du lieu
+6. Luu y ve du lieu
 - Neu deploy bang Render Blueprint co database, may tinh va dien thoai se dung chung du lieu online.
 - Khi dong bo online hoat dong, dau trang se hien Dong bo: Online.
 - Neu dong bo hien "Luu tren may nay", nghia la backend/database chua ket noi hoac dang mat mang. Luc do du lieu chi luu tam tren thiet bi dang dung.
 - Van nen tai file sao luu dinh ky de phong truong hop can khoi phuc.
 
-6. Quyen tai khoan
+7. Quyen tai khoan
 - Quan Li xem duoc tat ca bill, don da huy, bang gia, % chia, nhan vien, lich su ket ca va sao luu du lieu.
 - Thu Ngan chi order, in bill, tinh tien, huy don va ket ca.
 - Don bi huy khong bi xoa khoi he thong, ma hien trang thai Da huy de Quan Li xem lai.
@@ -40,20 +46,20 @@ HUONG DAN SU DUNG PT BARBERSHOP POS
 - Neu dung ban Render co database, server se chan Thu Ngan neu co tinh xoa bill, sua bill da luu, sua bang gia/nhan vien hoac huy bill khong co ma Quan Li.
 - Quan Li vao Dau ca / Ket ca de xem Nhat ky chong da bill.
 
-7. Chinh gia, dich vu, nhan vien
+8. Chinh gia, dich vu, nhan vien
 - Vao tab Bang gia & % de them/sua gia va % chia nhan vien.
 - Vao tab Nhan vien de them nhan vien.
 - Vao tab Dau ca / Ket ca de nhap tien dau ca, chot ca va sao luu du lieu.
 - Nut In ket ca se chot ca va in phieu ket ca. Sau khi ket ca, doanh thu ca hien tai se ve 0 de mo ca moi.
 - Neu da bam Ket ca truoc do, nut In ket ca se in lai ca vua ket gan nhat.
 
-8. So hoa don va so thu tu
+9. So hoa don va so thu tu
 - Moi bill da luu se co So HD dang HD000001, HD000002...
 - STT cho la so thu tu khach doi cat trong ca hien tai.
 - Khi tao bill co the nhap ten khach, so dien thoai, nhan vien, ghi chu va phuong thuc thanh toan.
 - O Lich su bill co the tim bang So HD, STT, ten khach, so dien thoai, nhan vien hoac phuong thuc thanh toan.
 
-9. Thanh toan va ket ca nang cao
+10. Thanh toan va ket ca nang cao
 - Web co cac phuong thuc: Tien mat, Chuyen khoan, The, Khac.
 - Doanh thu hop le tinh tat ca phuong thuc thanh toan.
 - Tien du kien trong ket chi tinh Tien dau ca + bill Tien mat.
@@ -61,13 +67,13 @@ HUONG DAN SU DUNG PT BARBERSHOP POS
 - Phieu ket ca se in ro doanh thu theo Tien mat, Chuyen khoan, The, Khac.
 - Man hinh Order co bang so lieu nhanh: doanh thu ca, STT tiep theo, tien mat trong ca, nhan vien noi bat/so don huy.
 
-10. In bill tinh tien
+11. In bill tinh tien
 - He thong chi co 1 nut chinh: In bill.
 - Bam nut In bill se luu hoa don vao he thong truoc, tao So HD/STT, tinh doanh thu, tinh tien chia tho va in bill day du.
 - Tho chi lam theo bill da duoc in tu nut nay.
 - Sau khi da in bill, hoa don nam trong lich su bill va khong the xoa.
 
-11. Chong da bill
+12. Chong da bill
 - Bill da luu duoc khoa: khong co nut sua bill, khong co xoa bill.
 - Nut In bill se luu hoa don vao he thong truoc roi moi in, khong con in hoa don nhap.
 - Sau khi da in/luu, bam Xoa dich vu chi xoa bill dang soan moi, khong xoa duoc hoa don da luu.
@@ -76,6 +82,6 @@ HUONG DAN SU DUNG PT BARBERSHOP POS
 - Quan Li xem duoc ai thao tac, luc nao, voi hoa don nao.
 - Khoa manh nhat la chay ban Render Web Service + Postgres, vi server se tu choi luu du lieu neu Thu Ngan co tinh lam mat bill.
 
-12. Gui cho nguoi khac
+13. Gui cho nguoi khac
 - Chi gui file ZIP khi ban da kiem tra xong.
 - Nguoi nhan giai nen ZIP truoc, sau do mo index.html.

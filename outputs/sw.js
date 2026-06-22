@@ -1,11 +1,15 @@
-const CACHE_NAME = "barbershop-order-offline-v21";
+const CACHE_NAME = "barbershop-order-offline-v23";
 const APP_FILES = [
   "./",
   "./index.html",
+  "./app-config.js",
   "./styles.css",
   "./app.js",
   "./manifest.webmanifest",
-  "./assets/logo.jpg"
+  "./assets/logo.jpg",
+  "./assets/apple-touch-icon.png",
+  "./assets/icon-192.png",
+  "./assets/icon-512.png"
 ];
 
 self.addEventListener("install", (event) => {

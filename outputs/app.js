@@ -1,6 +1,7 @@
 const STORE_KEY = "barbershop-order-v1";
 const BACKUP_VERSION = 1;
 const SYNC_INTERVAL_MS = 2500;
+const API_BASE_URL = String(window.PT_API_BASE_URL || "").replace(/\/+$/, "");
 
 const USERS = [
   { id: "9939", password: "040426", role: "manager", name: "Quản Lý" },
@@ -70,6 +71,7 @@ let lastRemoteUpdatedAt = "";
 let syncOnline = false;
 let toastTimer = null;
 let pendingManagerApproval = null;
+let deferredInstallPrompt = null;
 
 const $ = (selector) => document.querySelector(selector);
 const money = (value) => new Intl.NumberFormat("vi-VN").format(Number(value || 0)) + " VND";
@@ -80,6 +82,35 @@ const receiptTimeText = (iso) => iso ? new Date(iso).toLocaleString("vi-VN", {
   hour: "2-digit",
   minute: "2-digit"
 }) : "";
+const apiUrl = (path) => `${API_BASE_URL}${path}`;
+
+function isRunningAsApp() {
+  return window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+function updateInstallButton() {
+  const button = $("#installAppBtn");
+  if (!button) return;
+  button.classList.toggle("is-hidden", isRunningAsApp());
+}
+
+async function handleInstallApp() {
+  if (deferredInstallPrompt) {
+    deferredInstallPrompt.prompt();
+    const choice = await deferredInstallPrompt.userChoice.catch(() => null);
+    if (choice?.outcome === "accepted") {
+      showToast("Đã cài app PT Barbershop");
+    }
+    deferredInstallPrompt = null;
+    updateInstallButton();
+    return;
+  }
+
+  alert([
+    "iPhone: mở bằng Safari, bấm nút Chia sẻ, chọn Thêm vào Màn hình chính.",
+    "Android: bấm menu trình duyệt, chọn Cài đặt ứng dụng hoặc Thêm vào màn hình chính."
+  ].join("\n"));
+}
 
 function sequenceFromInvoiceNo(invoiceNo) {
   const digits = String(invoiceNo || "").match(/\d+/g)?.join("");
@@ -356,7 +387,7 @@ function requestManagerApproval(actionText) {
 }
 
 async function fetchCloudState() {
-  const response = await fetch("/api/state", { headers: syncHeaders(), cache: "no-store" });
+  const response = await fetch(apiUrl("/api/state"), { headers: syncHeaders(), cache: "no-store" });
   if (!response.ok) throw new Error("Sync fetch failed");
   return response.json();
 }
@@ -367,7 +398,7 @@ async function pushCloudState() {
     headers["X-PT-Manager-User"] = pendingManagerApproval.id;
     headers["X-PT-Manager-Password"] = pendingManagerApproval.password;
   }
-  const response = await fetch("/api/state", {
+  const response = await fetch(apiUrl("/api/state"), {
     method: "POST",
     headers,
     body: JSON.stringify({ data: businessState() })
@@ -1556,9 +1587,23 @@ $("#resetOrderBtn").addEventListener("click", resetOrder);
 $("#cancelCurrentBillBtn").addEventListener("click", clearSelectedServices);
 $("#saveBillBtn").addEventListener("click", printPaymentBill);
 $("#billSearch").addEventListener("input", renderBillHistory);
+$("#installAppBtn").addEventListener("click", handleInstallApp);
+
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  updateInstallButton();
+});
+
+window.addEventListener("appinstalled", () => {
+  deferredInstallPrompt = null;
+  updateInstallButton();
+  showToast("App PT Barbershop đã sẵn sàng");
+});
 
 renderAll();
 startCloudSync();
+updateInstallButton();
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {

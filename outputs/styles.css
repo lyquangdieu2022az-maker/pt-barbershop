@@ -310,6 +310,14 @@ select:focus {
   margin-bottom: 18px;
 }
 
+.install-button {
+  min-width: 92px;
+  border-color: rgba(15, 95, 184, 0.35);
+  background: #ffffff;
+  color: var(--blue-dark);
+  white-space: nowrap;
+}
+
 .status-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(142px, 1fr));
@@ -864,6 +872,10 @@ th {
   .panel-head {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .install-button {
+    width: 100%;
   }
 
   .status-grid,

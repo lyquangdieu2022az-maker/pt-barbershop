@@ -6,9 +6,14 @@
     <title>PT Barbershop POS</title>
     <meta name="theme-color" content="#080b10">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="PT Barbershop">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="application-name" content="PT Barbershop">
+    <meta name="format-detection" content="telephone=no">
     <link rel="manifest" href="manifest.webmanifest">
-    <link rel="apple-touch-icon" href="assets/logo.jpg">
+    <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
@@ -66,6 +71,7 @@
             <p class="eyebrow">Ngày làm việc</p>
             <h2 id="todayLabel">Order</h2>
           </div>
+          <button id="installAppBtn" class="ghost-button install-button" type="button">C&#224;i app</button>
           <div class="status-grid">
             <div class="status-pill">
               <span>Ca hiện tại</span>
@@ -360,6 +366,7 @@
     <div id="toast" class="toast is-hidden" role="status" aria-live="polite"></div>
     <section id="printArea" class="print-area" aria-hidden="true"></section>
 
+    <script src="app-config.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
