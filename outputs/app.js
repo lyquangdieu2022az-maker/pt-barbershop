@@ -16,6 +16,16 @@ const categoryNames = {
 
 const categoryOrder = ["cut", "perm", "color", "extra"];
 
+const paymentNames = {
+  cash: "Tiền mặt",
+  transfer: "Chuyển khoản",
+  card: "Thẻ",
+  other: "Khác"
+};
+
+const paymentOrder = ["cash", "transfer", "card", "other"];
+const SECURITY_LOG_LIMIT = 500;
+
 const defaultState = {
   session: null,
   loggedIn: false,
@@ -46,7 +56,8 @@ const defaultState = {
     closingCash: 0,
     queueCounter: 0
   },
-  shiftLogs: []
+  shiftLogs: [],
+  securityLog: []
 };
 
 let state = loadState();
@@ -57,6 +68,8 @@ let cloudPendingSave = false;
 let applyingRemoteState = false;
 let lastRemoteUpdatedAt = "";
 let syncOnline = false;
+let toastTimer = null;
+let pendingManagerApproval = null;
 
 const $ = (selector) => document.querySelector(selector);
 const money = (value) => new Intl.NumberFormat("vi-VN").format(Number(value || 0)) + " VND";
@@ -69,6 +82,28 @@ function sequenceFromInvoiceNo(invoiceNo) {
 
 function formatInvoiceNo(sequence) {
   return `HD${String(Number(sequence || 0)).padStart(6, "0")}`;
+}
+
+function safePaymentMethod(method) {
+  return paymentNames[method] ? method : "cash";
+}
+
+function paymentLabel(method) {
+  return paymentNames[safePaymentMethod(method)];
+}
+
+function emptyPaymentTotals() {
+  return paymentOrder.reduce((totals, method) => {
+    totals[method] = 0;
+    return totals;
+  }, {});
+}
+
+function normalizePaymentTotals(totals = {}) {
+  return paymentOrder.reduce((nextTotals, method) => {
+    nextTotals[method] = Number(totals[method] || 0);
+    return nextTotals;
+  }, {});
 }
 
 function nextInvoiceSequence() {
@@ -99,6 +134,16 @@ function normalizeState(nextState) {
   nextState.staff = Array.isArray(nextState.staff) ? nextState.staff : structuredClone(defaultState.staff);
   nextState.services = Array.isArray(nextState.services) ? nextState.services : structuredClone(defaultState.services);
   nextState.selectedServiceIds = Array.isArray(nextState.selectedServiceIds) ? nextState.selectedServiceIds : [];
+  nextState.securityLog = Array.isArray(nextState.securityLog) ? nextState.securityLog.map((entry) => ({
+    id: entry.id || crypto.randomUUID(),
+    createdAt: entry.createdAt || new Date().toISOString(),
+    userId: entry.userId || "",
+    userName: entry.userName || "Hệ thống",
+    role: entry.role || "",
+    action: entry.action || "Thao tác",
+    invoiceNo: entry.invoiceNo || "",
+    detail: entry.detail || ""
+  })).slice(0, SECURITY_LOG_LIMIT) : [];
   nextState.shift = { ...structuredClone(defaultState.shift), ...(nextState.shift || {}) };
   nextState.shift.queueCounter = Number(nextState.shift.queueCounter || 0);
   nextState.shiftLogs = Array.isArray(nextState.shiftLogs) ? nextState.shiftLogs.map((shift) => ({
@@ -115,7 +160,12 @@ function normalizeState(nextState) {
     billCount: Number(shift.billCount || 0),
     canceledCount: Number(shift.canceledCount || 0),
     expectedCash: Number(shift.expectedCash || 0),
-    difference: Number(shift.difference || 0)
+    difference: Number(shift.difference || 0),
+    paymentTotals: normalizePaymentTotals(shift.paymentTotals),
+    staffCommissions: Array.isArray(shift.staffCommissions) ? shift.staffCommissions.map((row) => ({
+      name: row.name || "-",
+      amount: Number(row.amount || 0)
+    })) : []
   })) : [];
 
   if (!nextState.shift.id && nextState.shift.openedAt) {
@@ -146,20 +196,35 @@ function normalizeState(nextState) {
       invoiceNo,
       queueNo,
       customer: bill.customer || "Khách lẻ",
+      phone: bill.phone || "",
       staffId: bill.staffId || "",
       staffName: bill.staffName || "Chưa chọn",
       note: bill.note || "",
+      paymentMethod: safePaymentMethod(bill.paymentMethod),
       shiftId,
       createdBy: bill.createdBy || "Hệ thống",
       status: bill.status || "paid",
       canceledAt: bill.canceledAt || "",
       canceledBy: bill.canceledBy || "",
       cancelReason: bill.cancelReason || "",
+      approvedBy: bill.approvedBy || "",
+      approvedAt: bill.approvedAt || "",
+      locked: bill.locked !== false,
       items,
       total,
       commission
     };
   }) : [];
+
+  nextState.shiftLogs = nextState.shiftLogs.map((shift) => {
+    const hasPayments = paymentOrder.some((method) => Number(shift.paymentTotals?.[method] || 0));
+    if (hasPayments) return shift;
+    const billsInShift = nextState.bills.filter((bill) => bill.shiftId === shift.id);
+    return {
+      ...shift,
+      paymentTotals: paymentTotalsForBills(billsInShift)
+    };
+  });
 
   nextState.invoiceCounter = Math.max(nextState.invoiceCounter, invoiceCounter);
   if (nextState.shift.id) {
@@ -183,7 +248,8 @@ function businessState() {
     services: state.services,
     bills: state.bills,
     shift: state.shift,
-    shiftLogs: state.shiftLogs
+    shiftLogs: state.shiftLogs,
+    securityLog: state.securityLog
   };
 }
 
@@ -192,6 +258,7 @@ function hasBusinessData(data = businessState()) {
     Number(data.invoiceCounter || 0) ||
     (Array.isArray(data.bills) && data.bills.length) ||
     (Array.isArray(data.shiftLogs) && data.shiftLogs.length) ||
+    (Array.isArray(data.securityLog) && data.securityLog.length) ||
     data.shift?.isOpen ||
     Number(data.shift?.openingCash || 0) ||
     (Array.isArray(data.staff) && data.staff.length !== defaultState.staff.length) ||
@@ -231,6 +298,57 @@ function setSyncStatus(text, online = false) {
   if (element) element.textContent = text;
 }
 
+function showToast(message, tone = "ok") {
+  const element = $("#toast");
+  if (!element) return;
+  clearTimeout(toastTimer);
+  element.textContent = message;
+  element.className = `toast ${tone}`;
+  toastTimer = setTimeout(() => element.classList.add("is-hidden"), 2600);
+}
+
+function logSecurity(action, detail = "", bill = null) {
+  if (!Array.isArray(state.securityLog)) state.securityLog = [];
+  state.securityLog.unshift({
+    id: crypto.randomUUID(),
+    createdAt: new Date().toISOString(),
+    userId: state.session?.id || "",
+    userName: state.session?.name || "Hệ thống",
+    role: state.session?.role || "",
+    action,
+    invoiceNo: bill?.invoiceNo || "",
+    detail
+  });
+  state.securityLog = state.securityLog.slice(0, SECURITY_LOG_LIMIT);
+}
+
+function managerUser() {
+  return USERS.find((user) => user.role === "manager");
+}
+
+function requestManagerApproval(actionText) {
+  if (isManager()) {
+    const manager = managerUser();
+    return { id: manager.id, name: manager.name, password: manager.password };
+  }
+
+  const id = prompt(`Cần Quản Lý duyệt để ${actionText}.\nNhập ID Quản Lý:`);
+  if (id === null) return null;
+  const password = prompt("Nhập mật khẩu Quản Lý:");
+  if (password === null) return null;
+
+  const manager = managerUser();
+  if (id.trim() !== manager.id || password !== manager.password) {
+    alert("Mã Quản Lý không đúng. Bill chưa bị hủy.");
+    logSecurity("Chặn hủy bill", `Sai mã Quản Lý khi ${actionText}`);
+    saveState();
+    return null;
+  }
+
+  pendingManagerApproval = { id: manager.id, password: manager.password };
+  return { id: manager.id, name: manager.name, password: manager.password };
+}
+
 async function fetchCloudState() {
   const response = await fetch("/api/state", { headers: syncHeaders(), cache: "no-store" });
   if (!response.ok) throw new Error("Sync fetch failed");
@@ -238,13 +356,25 @@ async function fetchCloudState() {
 }
 
 async function pushCloudState() {
+  const headers = syncHeaders();
+  if (pendingManagerApproval) {
+    headers["X-PT-Manager-User"] = pendingManagerApproval.id;
+    headers["X-PT-Manager-Password"] = pendingManagerApproval.password;
+  }
   const response = await fetch("/api/state", {
     method: "POST",
-    headers: syncHeaders(),
+    headers,
     body: JSON.stringify({ data: businessState() })
   });
-  if (!response.ok) throw new Error("Sync save failed");
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    if (response.status === 403) {
+      showToast(payload.error || "Bảo mật đã chặn thao tác bill.", "danger");
+    }
+    throw new Error(payload.error || "Sync save failed");
+  }
   const payload = await response.json();
+  pendingManagerApproval = null;
   lastRemoteUpdatedAt = payload.updatedAt || lastRemoteUpdatedAt;
   setSyncStatus("Online", true);
 }
@@ -310,7 +440,8 @@ function dataForBackup() {
     services: state.services,
     bills: state.bills,
     shift: state.shift,
-    shiftLogs: state.shiftLogs
+    shiftLogs: state.shiftLogs,
+    securityLog: state.securityLog
   };
 }
 
@@ -322,6 +453,7 @@ function renderBackupInfo() {
     <div class="summary-row"><span>Nhân viên</span><strong>${state.staff.length}</strong></div>
     <div class="summary-row"><span>Bill đã lưu</span><strong>${state.bills.length}</strong></div>
     <div class="summary-row"><span>Lịch sử kết ca</span><strong>${state.shiftLogs.length}</strong></div>
+    <div class="summary-row"><span>Nhật ký bảo mật</span><strong>${state.securityLog.length}</strong></div>
   `;
 }
 
@@ -378,6 +510,7 @@ function importBackupFile(file) {
         loggedIn: true,
         selectedServiceIds: []
       });
+      logSecurity("Khôi phục dữ liệu", `Nhập file sao lưu: ${file.name || "không rõ tên"}`);
       saveState();
       renderAll();
       setBackupStatus("Đã khôi phục dữ liệu thành công từ file sao lưu.");
@@ -456,6 +589,30 @@ function totalsForBills(bills) {
   };
 }
 
+function paymentTotalsForBills(bills) {
+  const totals = emptyPaymentTotals();
+  activeBills(bills).forEach((bill) => {
+    const method = safePaymentMethod(bill.paymentMethod);
+    totals[method] += Number(bill.total || 0);
+  });
+  return totals;
+}
+
+function paymentSummaryText(totals) {
+  return paymentOrder
+    .map((method) => `${paymentLabel(method)}: ${money(totals[method])}`)
+    .join(" | ");
+}
+
+function paymentRowsHtml(totals) {
+  return paymentOrder.map((method) => `
+    <div class="summary-row">
+      <span>${paymentLabel(method)}</span>
+      <strong>${money(totals[method])}</strong>
+    </div>
+  `).join("");
+}
+
 function commissionByStaff(bills) {
   const rows = new Map();
   activeBills(bills).forEach((bill) => {
@@ -480,7 +637,9 @@ function billMatchesSearch(bill, term) {
     bill.queueNo,
     `#${bill.queueNo}`,
     bill.customer,
-    bill.staffName
+    bill.phone,
+    bill.staffName,
+    paymentLabel(bill.paymentMethod)
   ].some((value) => String(value || "").toLowerCase().includes(term));
 }
 
@@ -495,6 +654,7 @@ function cancelDetailsHtml(bill) {
   if (!isManager() || bill.status !== "canceled") return "";
   return `
     <div class="row-meta">Hủy bởi: ${escapeHtml(bill.canceledBy || "-")} ${timeText(bill.canceledAt) ? `- ${timeText(bill.canceledAt)}` : ""}</div>
+    <div class="row-meta">Quản Lý duyệt: ${escapeHtml(bill.approvedBy || "-")} ${timeText(bill.approvedAt) ? `- ${timeText(bill.approvedAt)}` : ""}</div>
     <div class="row-meta">Lý do: ${escapeHtml(bill.cancelReason || "Không ghi")}</div>
   `;
 }
@@ -531,6 +691,42 @@ function renderPermissions() {
       setActiveTab("order");
     }
   }
+}
+
+function renderQuickStats() {
+  const container = $("#quickStats");
+  if (!container) return;
+
+  const shiftBills = currentShiftBills();
+  const shiftTotals = totalsForBills(shiftBills);
+  const paymentTotals = paymentTotalsForBills(shiftBills);
+  const staffRows = commissionByStaff(shiftBills).sort((a, b) => b[1] - a[1]);
+  const topStaff = staffRows.length ? `${staffRows[0][0]} - ${money(staffRows[0][1])}` : "Chưa có";
+  const nextQueue = state.shift.isOpen ? `#${Number(state.shift.queueCounter || 0) + 1}` : "Mở ca trước";
+  const shopNet = Math.max(0, shiftTotals.sales - shiftTotals.commission);
+
+  container.innerHTML = `
+    <article class="metric-tile accent-blue">
+      <span>Doanh thu ca</span>
+      <strong>${money(shiftTotals.sales)}</strong>
+      <small>${shiftTotals.billCount} bill hợp lệ</small>
+    </article>
+    <article class="metric-tile accent-red">
+      <span>STT tiếp theo</span>
+      <strong>${nextQueue}</strong>
+      <small>${state.shift.isOpen ? "Khách mới trong ca" : "Chưa mở ca"}</small>
+    </article>
+    <article class="metric-tile">
+      <span>Tiền mặt trong ca</span>
+      <strong>${money(paymentTotals.cash)}</strong>
+      <small>${paymentTotals.transfer ? `CK ${money(paymentTotals.transfer)}` : "Chưa có chuyển khoản"}</small>
+    </article>
+    <article class="metric-tile ${isManager() ? "" : "is-muted"}">
+      <span>${isManager() ? "Nhân viên nổi bật" : "Đơn đã hủy"}</span>
+      <strong>${isManager() ? escapeHtml(topStaff) : shiftTotals.canceledCount}</strong>
+      <small>${isManager() ? `Tiệm còn ${money(shopNet)}` : `${money(shiftTotals.canceledAmount)}`}</small>
+    </article>
+  `;
 }
 
 function renderStaffSelect() {
@@ -580,6 +776,8 @@ function renderBillPreview() {
   const nextInvoiceNo = formatInvoiceNo(Number(state.invoiceCounter || 0) + 1);
   const nextQueueText = state.shift.isOpen ? `#${Number(state.shift.queueCounter || 0) + 1}` : "Chưa mở ca";
   const customer = $("#customerName").value.trim() || "Khách lẻ";
+  const phone = $("#customerPhone").value.trim();
+  const paymentMethod = $("#paymentMethod").value;
 
   if (!services.length) {
     $("#billPreview").innerHTML = `<p class="empty-state">Chọn dịch vụ để tạo bill.</p>`;
@@ -593,7 +791,9 @@ function renderBillPreview() {
     </div>
     <div class="bill-client">
       <strong>${escapeHtml(customer)}</strong>
+      ${phone ? `<span>SĐT: ${escapeHtml(phone)}</span>` : ""}
       <span>Nhân viên: ${escapeHtml(staff?.name || "Chưa chọn")}</span>
+      <span>Thanh toán: ${paymentLabel(paymentMethod)}</span>
     </div>
     ${services.map((service) => `
       <div class="bill-line">
@@ -642,9 +842,16 @@ function renderStaffList() {
   container.innerHTML = state.staff.length ? state.staff.map((person) => `
     <div class="staff-row">
       <strong>${escapeHtml(person.name)}</strong>
-      <button class="small-button danger-button" data-delete-staff="${person.id}">Xóa</button>
+      <span class="row-actions">
+        <button class="small-button" data-edit-staff="${person.id}">Sửa</button>
+        <button class="small-button danger-button" data-delete-staff="${person.id}">Xóa</button>
+      </span>
     </div>
   `).join("") : `<p class="empty-state">Chưa có nhân viên.</p>`;
+
+  const isEditing = Boolean($("#staffId")?.value);
+  const submit = $("#staffSubmitBtn");
+  if (submit) submit.textContent = isEditing ? "Lưu nhân viên" : "Thêm nhân viên";
 }
 
 function renderBillHistory() {
@@ -660,7 +867,7 @@ function renderBillHistory() {
 
   if (!bills.length) {
     const emptyText = term ? "Không tìm thấy hóa đơn phù hợp." : "Chưa có bill nào.";
-    body.innerHTML = `<tr><td colspan="${isManager() ? 9 : 8}">${emptyText}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="${isManager() ? 10 : 9}">${emptyText}</td></tr>`;
     cards.innerHTML = `<p class="empty-state">${emptyText}</p>`;
     return;
   }
@@ -670,19 +877,27 @@ function renderBillHistory() {
     const services = bill.items.map((item) => escapeHtml(item.name)).join(", ");
     const cancelNote = cancelDetailsHtml(bill);
     const commissionCell = isManager() ? `<td>${canceled ? "0 VND" : money(bill.commission)}</td>` : "";
+    const customerMeta = (bill.phone || bill.note) ? `
+      <div class="row-meta">
+        ${bill.phone ? `<span>SĐT: ${escapeHtml(bill.phone)}</span>` : ""}
+        ${bill.note ? `<span>Ghi chú: ${escapeHtml(bill.note)}</span>` : ""}
+      </div>
+    ` : "";
+    const cancelButtonText = isManager() ? "Hủy đơn" : "Hủy cần QL";
     const actions = `
       <button class="small-button" data-print-bill="${bill.id}">In lại</button>
-      ${canCancelBill(bill) ? `<button class="small-button danger-button" data-cancel-bill="${bill.id}">Hủy đơn</button>` : ""}
+      ${canCancelBill(bill) ? `<button class="small-button danger-button" data-cancel-bill="${bill.id}">${cancelButtonText}</button>` : ""}
     `;
 
     return `
       <tr class="${canceled ? "row-canceled" : ""}">
         <td>${billIdentityHtml(bill)}</td>
         <td>${timeText(bill.createdAt)}</td>
-        <td>${escapeHtml(bill.customer)}${cancelNote}</td>
+        <td>${escapeHtml(bill.customer)}${customerMeta}${cancelNote}</td>
         <td>${escapeHtml(bill.staffName)}</td>
         <td>${services}</td>
         <td><span class="status ${canceled ? "canceled" : "paid"}">${canceled ? "Đã hủy" : "Đã tính tiền"}</span></td>
+        <td>${paymentLabel(bill.paymentMethod)}</td>
         <td><strong>${money(bill.total)}</strong></td>
         ${commissionCell}
         <td><span class="row-actions">${actions}</span></td>
@@ -693,9 +908,10 @@ function renderBillHistory() {
   cards.innerHTML = bills.map((bill) => {
     const canceled = bill.status === "canceled";
     const services = bill.items.map((item) => escapeHtml(item.name)).join(", ");
+    const cancelButtonText = isManager() ? "Hủy đơn" : "Hủy cần QL";
     const actions = `
       <button class="small-button" data-print-bill="${bill.id}">In lại</button>
-      ${canCancelBill(bill) ? `<button class="small-button danger-button" data-cancel-bill="${bill.id}">Hủy đơn</button>` : ""}
+      ${canCancelBill(bill) ? `<button class="small-button danger-button" data-cancel-bill="${bill.id}">${cancelButtonText}</button>` : ""}
     `;
 
     return `
@@ -707,6 +923,8 @@ function renderBillHistory() {
               <span>${escapeHtml(bill.invoiceNo || "-")} - STT #${escapeHtml(bill.queueNo || "-")}</span>
               <span>${timeText(bill.createdAt)}</span>
               <span>Nhân viên: ${escapeHtml(bill.staffName)}</span>
+              <span>Thanh toán: ${paymentLabel(bill.paymentMethod)}</span>
+              ${bill.phone ? `<span>SĐT: ${escapeHtml(bill.phone)}</span>` : ""}
             </div>
           </div>
           <span class="status ${canceled ? "canceled" : "paid"}">${canceled ? "Đã hủy" : "Đã tính tiền"}</span>
@@ -732,12 +950,14 @@ function renderBillHistory() {
 function renderShift() {
   const bills = currentShiftBills();
   const totals = totalsForBills(bills);
-  const expectedCash = Number(state.shift.openingCash || 0) + totals.sales;
+  const paymentTotals = paymentTotalsForBills(bills);
+  const expectedCash = Number(state.shift.openingCash || 0) + paymentTotals.cash;
   const hasClosed = Boolean(state.shift.closedAt);
   const difference = Number(state.shift.closingCash || 0) - expectedCash;
 
   $("#shiftStatus").textContent = state.shift.isOpen ? "Đang mở ca" : hasClosed ? "Đã kết ca" : "Chưa mở ca";
   $("#cashStatus").textContent = money(expectedCash);
+  $("#paymentStatus").textContent = totals.sales ? `${money(totals.sales)}` : "0 VND";
   $("#openingCash").value = state.shift.isOpen ? Number(state.shift.openingCash || 0) : "";
   $("#openingCash").placeholder = state.shift.isOpen ? String(state.shift.openingCash || 0) : "0";
   $("#closingCash").value = hasClosed ? Number(state.shift.closingCash || 0) : "";
@@ -751,7 +971,7 @@ function renderShift() {
   `).join("") : "";
 
   $("#shiftSummary").innerHTML = `
-    <div class="summary-row"><span>Lưu dữ liệu</span><strong>Đã lưu trên máy này</strong></div>
+    <div class="summary-row"><span>Lưu dữ liệu</span><strong>${syncOnline ? "Đã đồng bộ online" : "Đang lưu trên máy này"}</strong></div>
     <div class="summary-row"><span>Trạng thái</span><strong>${state.shift.isOpen ? "Đang mở" : hasClosed ? "Đã kết ca" : "Chưa mở ca"}</strong></div>
     <div class="summary-row"><span>Người mở ca</span><strong>${escapeHtml(state.shift.cashierName || "-")}</strong></div>
     <div class="summary-row"><span>Mở ca lúc</span><strong>${timeText(state.shift.openedAt) || "-"}</strong></div>
@@ -759,9 +979,11 @@ function renderShift() {
     <div class="summary-row"><span>Tiền đầu ca</span><strong>${money(state.shift.openingCash)}</strong></div>
     <div class="summary-row"><span>Số bill hợp lệ</span><strong>${totals.billCount}</strong></div>
     <div class="summary-row"><span>Doanh thu hợp lệ</span><strong>${money(totals.sales)}</strong></div>
+    ${paymentRowsHtml(paymentTotals)}
     <div class="summary-row"><span>Đơn đã hủy</span><strong>${totals.canceledCount} đơn / ${money(totals.canceledAmount)}</strong></div>
     <div class="summary-row"><span>Tiền dự kiến trong két</span><strong>${money(expectedCash)}</strong></div>
     ${isManager() ? `<div class="summary-row"><span>Tổng chia nhân viên</span><strong>${money(totals.commission)}</strong></div>` : ""}
+    ${isManager() ? `<div class="summary-row"><span>Tiệm còn lại</span><strong>${money(Math.max(0, totals.sales - totals.commission))}</strong></div>` : ""}
     ${staffRows || (isManager() ? `<p class="empty-state">Chưa có tiền chia nhân viên.</p>` : "")}
     <div class="summary-row"><span>Tiền thực tế kết ca</span><strong>${hasClosed ? money(state.shift.closingCash) : "-"}</strong></div>
     <div class="summary-row"><span>Chênh lệch</span><strong class="${difference >= 0 ? "ok" : "danger-text"}">${hasClosed ? money(difference) : "-"}</strong></div>
@@ -777,19 +999,46 @@ function renderShiftLogs() {
     return;
   }
 
-  body.innerHTML = state.shiftLogs.slice().sort((a, b) => new Date(b.closedAt) - new Date(a.closedAt)).map((shift) => `
-    <tr>
-      <td>${escapeHtml(shift.cashierName)}</td>
-      <td>${timeText(shift.openedAt)}</td>
-      <td>${timeText(shift.closedAt)}</td>
-      <td>${money(shift.openingCash)}</td>
-      <td><strong>${money(shift.sales)}</strong><div class="row-meta">${shift.billCount} bill hợp lệ</div></td>
-      <td>${shift.canceledCount} đơn<div class="row-meta">${money(shift.canceledAmount)}</div></td>
-      <td>${money(shift.expectedCash)}</td>
-      <td>${money(shift.closingCash)}</td>
-      <td><strong class="${shift.difference >= 0 ? "ok" : "danger-text"}">${money(shift.difference)}</strong></td>
-    </tr>
-  `).join("");
+  body.innerHTML = state.shiftLogs.slice().sort((a, b) => new Date(b.closedAt) - new Date(a.closedAt)).map((shift) => {
+    const payments = normalizePaymentTotals(shift.paymentTotals);
+    return `
+      <tr>
+        <td>${escapeHtml(shift.cashierName)}</td>
+        <td>${timeText(shift.openedAt)}</td>
+        <td>${timeText(shift.closedAt)}</td>
+        <td>${money(shift.openingCash)}</td>
+        <td><strong>${money(shift.sales)}</strong><div class="row-meta">${shift.billCount} bill hợp lệ</div><div class="row-meta">${escapeHtml(paymentSummaryText(payments))}</div></td>
+        <td>${shift.canceledCount} đơn<div class="row-meta">${money(shift.canceledAmount)}</div></td>
+        <td>${money(shift.expectedCash)}</td>
+        <td>${money(shift.closingCash)}</td>
+        <td><strong class="${shift.difference >= 0 ? "ok" : "danger-text"}">${money(shift.difference)}</strong></td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function renderSecurityLog() {
+  const body = $("#securityLogBody");
+  if (!body) return;
+
+  const entries = Array.isArray(state.securityLog) ? state.securityLog.slice(0, SECURITY_LOG_LIMIT) : [];
+  if (!entries.length) {
+    body.innerHTML = `<tr><td colspan="5">Chưa có nhật ký bảo mật.</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = entries
+    .slice()
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .map((entry) => `
+      <tr>
+        <td>${timeText(entry.createdAt)}</td>
+        <td>${escapeHtml(entry.userName || "-")}<div class="row-meta">${escapeHtml(entry.role || "-")}</div></td>
+        <td><strong>${escapeHtml(entry.action || "-")}</strong></td>
+        <td>${escapeHtml(entry.invoiceNo || "-")}</td>
+        <td>${escapeHtml(entry.detail || "-")}</td>
+      </tr>
+    `).join("");
 }
 
 function renderAll() {
@@ -806,17 +1055,21 @@ function renderAll() {
   renderStaffSelect();
   renderServices();
   renderBillPreview();
+  renderQuickStats();
   renderCatalog();
   renderStaffList();
   renderBillHistory();
   renderShift();
   renderShiftLogs();
+  renderSecurityLog();
   renderBackupInfo();
 }
 
 function resetOrder() {
   state.selectedServiceIds = [];
   $("#customerName").value = "";
+  $("#customerPhone").value = "";
+  $("#paymentMethod").value = "cash";
   $("#orderNote").value = "";
   saveState();
   renderAll();
@@ -826,6 +1079,7 @@ function clearSelectedServices() {
   state.selectedServiceIds = [];
   saveState();
   renderAll();
+  showToast(`Đã mở ca với ${money(state.shift.openingCash)}`);
 }
 
 function saveBill() {
@@ -849,16 +1103,18 @@ function saveBill() {
   const { total, commission } = billTotals(services);
   const invoiceSequence = nextInvoiceSequence();
   const queueNo = nextQueueNumber();
-  state.bills.push({
+  const bill = {
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
     invoiceSequence,
     invoiceNo: formatInvoiceNo(invoiceSequence),
     queueNo,
     customer: $("#customerName").value.trim() || "Khách lẻ",
+    phone: $("#customerPhone").value.trim(),
     staffId: staff.id,
     staffName: staff.name,
     note: $("#orderNote").value.trim(),
+    paymentMethod: safePaymentMethod($("#paymentMethod").value),
     shiftId: state.shift.id,
     createdBy: state.session.name,
     status: "paid",
@@ -874,8 +1130,15 @@ function saveBill() {
     })),
     total,
     commission
-  });
+  };
+  state.bills.push(bill);
+  logSecurity(
+    "Lưu bill",
+    `${bill.staffName} làm ${bill.items.length} dịch vụ, ${paymentLabel(bill.paymentMethod)}, tổng ${money(bill.total)}, STT #${bill.queueNo}`,
+    bill
+  );
   resetOrder();
+  showToast(`Đã lưu ${bill.invoiceNo} - STT #${bill.queueNo}`);
 }
 
 function cancelBill(billId) {
@@ -888,13 +1151,19 @@ function cancelBill(billId) {
     alert("Phải nhập lý do hủy đơn.");
     return;
   }
+  const approval = requestManagerApproval(`hủy hóa đơn ${bill.invoiceNo || ""}`);
+  if (!approval) return;
 
   bill.status = "canceled";
   bill.canceledAt = new Date().toISOString();
   bill.canceledBy = state.session.name;
   bill.cancelReason = cleanReason;
+  bill.approvedBy = approval.name;
+  bill.approvedAt = new Date().toISOString();
+  logSecurity("Hủy bill", `Lý do: ${cleanReason}. Quản Lý duyệt: ${approval.name}`, bill);
   saveState();
   renderAll();
+  showToast(`Đã hủy ${bill.invoiceNo}`);
 }
 
 function printCurrentBill() {
@@ -910,7 +1179,9 @@ function printCurrentBill() {
     invoiceNo: formatInvoiceNo(Number(state.invoiceCounter || 0) + 1),
     queueNo: state.shift.isOpen ? Number(state.shift.queueCounter || 0) + 1 : "",
     customer: $("#customerName").value.trim() || "Khách lẻ",
+    phone: $("#customerPhone").value.trim(),
     staffName: staff?.name || "Chưa chọn",
+    paymentMethod: safePaymentMethod($("#paymentMethod").value),
     items: services,
     total,
     status: "draft"
@@ -932,9 +1203,12 @@ function printBill(bill) {
       <div class="receipt-row"><span>STT chờ</span><strong>${bill.queueNo ? `#${escapeHtml(bill.queueNo)}` : "-"}</strong></div>
       <div class="receipt-row"><span>Thời gian</span><strong>${timeText(bill.createdAt)}</strong></div>
       <div class="receipt-row"><span>Khách</span><strong>${escapeHtml(bill.customer)}</strong></div>
+      ${bill.phone ? `<div class="receipt-row"><span>SĐT</span><strong>${escapeHtml(bill.phone)}</strong></div>` : ""}
       <div class="receipt-row"><span>Nhân viên</span><strong>${escapeHtml(bill.staffName)}</strong></div>
+      <div class="receipt-row"><span>Thanh toán</span><strong>${paymentLabel(bill.paymentMethod)}</strong></div>
       ${bill.status === "canceled" ? `<div class="receipt-status">Đơn đã hủy</div>` : ""}
       ${bill.status === "canceled" && isManager() ? `<div class="receipt-row"><span>Lý do hủy</span><strong>${escapeHtml(bill.cancelReason || "Không ghi")}</strong></div>` : ""}
+      ${bill.status === "canceled" && isManager() ? `<div class="receipt-row"><span>QL duyệt</span><strong>${escapeHtml(bill.approvedBy || "-")}</strong></div>` : ""}
       <hr>
       ${bill.items.map((item) => `
         <div class="receipt-row">
@@ -944,6 +1218,47 @@ function printBill(bill) {
       `).join("")}
       <hr>
       <div class="receipt-row receipt-total"><span>Tổng tiền</span><strong>${money(bill.total)}</strong></div>
+    </div>
+  `;
+  window.print();
+}
+
+function printShiftReport(report) {
+  const staffRows = Array.isArray(report.staffCommissions) && report.staffCommissions.length
+    ? report.staffCommissions.map((row) => `
+      <div class="receipt-row">
+        <span>Chia ${escapeHtml(row.name)}</span>
+        <strong>${money(row.amount)}</strong>
+      </div>
+    `).join("")
+    : `<div class="receipt-row"><span>Chia nhân viên</span><strong>0 VND</strong></div>`;
+  const paymentRows = paymentOrder.map((method) => `
+    <div class="receipt-row">
+      <span>${paymentLabel(method)}</span>
+      <strong>${money(normalizePaymentTotals(report.paymentTotals)[method])}</strong>
+    </div>
+  `).join("");
+
+  $("#printArea").innerHTML = `
+    <div class="receipt">
+      <h1>PT Barbershop</h1>
+      <p>Phiếu kết ca</p>
+      <div class="receipt-row"><span>Người trực</span><strong>${escapeHtml(report.cashierName || "-")}</strong></div>
+      <div class="receipt-row"><span>Mở ca</span><strong>${timeText(report.openedAt) || "-"}</strong></div>
+      <div class="receipt-row"><span>Kết ca</span><strong>${timeText(report.closedAt) || "-"}</strong></div>
+      <hr>
+      <div class="receipt-row"><span>Tiền đầu ca</span><strong>${money(report.openingCash)}</strong></div>
+      <div class="receipt-row"><span>Bill hợp lệ</span><strong>${Number(report.billCount || 0)}</strong></div>
+      <div class="receipt-row"><span>Doanh thu</span><strong>${money(report.sales)}</strong></div>
+      ${paymentRows}
+      <div class="receipt-row"><span>Đơn hủy</span><strong>${Number(report.canceledCount || 0)} / ${money(report.canceledAmount)}</strong></div>
+      <div class="receipt-row"><span>Tiền dự kiến</span><strong>${money(report.expectedCash)}</strong></div>
+      <div class="receipt-row"><span>Tiền thực tế</span><strong>${money(report.closingCash)}</strong></div>
+      <div class="receipt-row receipt-total"><span>Chênh lệch</span><strong>${money(report.difference)}</strong></div>
+      <hr>
+      ${staffRows}
+      <hr>
+      <p>Đã lưu kết ca. Doanh thu ca hiện tại đã về 0.</p>
     </div>
   `;
   window.print();
@@ -966,19 +1281,23 @@ function openShift() {
     queueCounter: 0
   };
   state.selectedServiceIds = [];
+  logSecurity("Mở ca", `Tiền đầu ca ${money(state.shift.openingCash)}`);
   saveState();
   renderAll();
+  showToast(`Đã mở ca với ${money(state.shift.openingCash)}`);
 }
 
-function closeShift() {
+function closeShift(options = {}) {
   if (!state.shift.isOpen) {
     alert("Chưa có ca đang mở.");
-    return;
+    return null;
   }
 
   const bills = currentShiftBills();
   const totals = totalsForBills(bills);
-  const expectedCash = Number(state.shift.openingCash || 0) + totals.sales;
+  const paymentTotals = paymentTotalsForBills(bills);
+  const staffCommissions = commissionByStaff(bills).map(([name, amount]) => ({ name, amount }));
+  const expectedCash = Number(state.shift.openingCash || 0) + paymentTotals.cash;
   const closingCashInput = $("#closingCash").value;
   const closingCash = closingCashInput === "" ? expectedCash : Number(closingCashInput || 0);
 
@@ -993,13 +1312,26 @@ function closeShift() {
     canceledAmount: totals.canceledAmount,
     billCount: totals.billCount,
     canceledCount: totals.canceledCount,
+    paymentTotals,
+    staffCommissions,
     expectedCash,
     difference: closingCash - expectedCash
   };
   state.shiftLogs = state.shiftLogs.filter((shift) => shift.id !== state.shift.id);
   state.shiftLogs.push(report);
+  logSecurity(
+    "Kết ca",
+    `Doanh thu ${money(report.sales)}, tiền mặt dự kiến ${money(report.expectedCash)}, thực tế ${money(report.closingCash)}, lệch ${money(report.difference)}`
+  );
+  state.shift = structuredClone(defaultState.shift);
+  state.selectedServiceIds = [];
   saveState();
   renderAll();
+  showToast("Đã kết ca. Doanh thu ca hiện tại đã về 0.");
+  if (options.print) {
+    printShiftReport(report);
+  }
+  return report;
 }
 
 function escapeHtml(value) {
@@ -1057,7 +1389,7 @@ $("#serviceGroups").addEventListener("change", (event) => {
   renderAll();
 });
 
-["customerName", "orderStaff", "orderNote"].forEach((id) => {
+["customerName", "customerPhone", "orderStaff", "paymentMethod", "orderNote"].forEach((id) => {
   $(`#${id}`).addEventListener("input", renderBillPreview);
   $(`#${id}`).addEventListener("change", renderBillPreview);
 });
@@ -1097,6 +1429,7 @@ $("#serviceForm").addEventListener("submit", (event) => {
   $("#serviceId").value = "";
   saveState();
   renderAll();
+  showToast(existing ? "Đã sửa dịch vụ" : "Đã thêm dịch vụ");
 });
 
 $("#catalogList").addEventListener("click", (event) => {
@@ -1125,6 +1458,7 @@ $("#catalogList").addEventListener("click", (event) => {
     state.selectedServiceIds = state.selectedServiceIds.filter((serviceId) => serviceId !== deleteId);
     saveState();
     renderAll();
+    showToast("Đã xóa dịch vụ");
   }
 });
 
@@ -1135,26 +1469,52 @@ $("#staffForm").addEventListener("submit", (event) => {
     return;
   }
 
+  const editId = $("#staffId").value;
   const name = $("#staffName").value.trim();
   if (!name) {
     alert("Hãy nhập tên nhân viên.");
     return;
   }
-  state.staff.push({ id: crypto.randomUUID(), name });
+  const existing = editId ? staffById(editId) : null;
+  if (existing) {
+    existing.name = name;
+    state.bills.forEach((bill) => {
+      if (bill.staffId === editId) bill.staffName = name;
+    });
+  } else {
+    state.staff.push({ id: crypto.randomUUID(), name });
+  }
+  $("#staffId").value = "";
   event.target.reset();
   saveState();
   renderAll();
+  showToast(existing ? "Đã sửa nhân viên" : "Đã thêm nhân viên");
 });
 
 $("#staffList").addEventListener("click", (event) => {
   if (!isManager()) return;
+  const editId = event.target.dataset.editStaff;
   const id = event.target.dataset.deleteStaff;
+  if (editId) {
+    const person = staffById(editId);
+    if (!person) return;
+    $("#staffId").value = person.id;
+    $("#staffName").value = person.name;
+    $("#staffName").focus();
+    renderStaffList();
+    return;
+  }
   if (!id) return;
   const person = staffById(id);
   if (person && !confirm(`Xóa nhân viên "${person.name}"?`)) return;
   state.staff = state.staff.filter((item) => item.id !== id);
+  if ($("#staffId").value === id) {
+    $("#staffId").value = "";
+    $("#staffForm").reset();
+  }
   saveState();
   renderAll();
+  showToast("Đã xóa nhân viên");
 });
 
 $("#billHistory").addEventListener("click", (event) => {
@@ -1179,6 +1539,19 @@ $("#openShiftForm").addEventListener("submit", (event) => {
 $("#closeShiftForm").addEventListener("submit", (event) => {
   event.preventDefault();
   closeShift();
+});
+
+$("#printShiftBtn").addEventListener("click", () => {
+  if (state.shift.isOpen) {
+    closeShift({ print: true });
+    return;
+  }
+  const latestReport = state.shiftLogs.slice().sort((a, b) => new Date(b.closedAt) - new Date(a.closedAt))[0];
+  if (latestReport) {
+    printShiftReport(latestReport);
+    return;
+  }
+  alert("Chưa có ca nào để in.");
 });
 
 $("#downloadBackupBtn").addEventListener("click", downloadBackup);

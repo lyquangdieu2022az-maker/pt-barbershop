@@ -76,6 +76,10 @@
               <strong id="cashStatus">0 VND</strong>
             </div>
             <div class="status-pill">
+              <span>Thanh toÃ¡n ca</span>
+              <strong id="paymentStatus">0 VND</strong>
+            </div>
+            <div class="status-pill">
               <span>Đồng bộ</span>
               <strong id="syncStatus">Đang kiểm tra</strong>
             </div>
@@ -83,6 +87,7 @@
         </header>
 
         <section id="tab-order" class="tab-panel">
+          <section id="quickStats" class="stats-ribbon"></section>
           <div class="order-grid">
             <section class="panel order-info-panel">
               <div class="panel-head">
@@ -96,8 +101,19 @@
                 <label>Tên khách
                   <input id="customerName" placeholder="Khách lẻ">
                 </label>
+                <label>Số điện thoại
+                  <input id="customerPhone" inputmode="tel" autocomplete="tel" placeholder="VD: 0901234567">
+                </label>
                 <label>Nhân viên cắt/làm
                   <select id="orderStaff"></select>
+                </label>
+                <label>Thanh toán
+                  <select id="paymentMethod">
+                    <option value="cash">Tiền mặt</option>
+                    <option value="transfer">Chuyển khoản</option>
+                    <option value="card">Thẻ</option>
+                    <option value="other">Khác</option>
+                  </select>
                 </label>
                 <label>Ghi chú
                   <input id="orderNote" placeholder="Ví dụ: yêu cầu nhẹ tay">
@@ -154,6 +170,7 @@
                     <th>Nhân viên</th>
                     <th>Dịch vụ</th>
                     <th>Trạng thái</th>
+                    <th>Thanh toán</th>
                     <th>Tổng</th>
                     <th data-manager-only>Chia NV</th>
                     <th>Thao tác</th>
@@ -219,10 +236,11 @@
                 </div>
               </div>
               <form id="staffForm" class="stack-form">
+                <input id="staffId" type="hidden">
                 <label>Tên nhân viên
                   <input id="staffName" placeholder="Nhân viên A">
                 </label>
-                <button type="submit" class="primary-button">Thêm nhân viên</button>
+                <button id="staffSubmitBtn" type="submit" class="primary-button">Thêm nhân viên</button>
               </form>
             </section>
             <section class="panel">
@@ -257,6 +275,7 @@
                   <input id="closingCash" type="number" min="0" step="1000" placeholder="0">
                 </label>
                 <button type="submit" class="primary-button">Kết ca</button>
+                <button id="printShiftBtn" type="button" class="ghost-button">In kết ca</button>
               </form>
             </section>
             <section class="panel">
@@ -298,6 +317,29 @@
           <section class="panel" data-manager-only>
             <div class="panel-head">
               <div>
+                <p class="eyebrow">Bảo mật</p>
+                <h3>Nhật ký chống đá bill</h3>
+              </div>
+              <span class="scope-badge">Bill đã lưu không thể xóa khỏi hệ thống</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Thời gian</th>
+                    <th>Người thao tác</th>
+                    <th>Hạng mục</th>
+                    <th>Hóa đơn</th>
+                    <th>Chi tiết</th>
+                  </tr>
+                </thead>
+                <tbody id="securityLogBody"></tbody>
+              </table>
+            </div>
+          </section>
+          <section class="panel" data-manager-only>
+            <div class="panel-head">
+              <div>
                 <p class="eyebrow">Sao l&#432;u</p>
                 <h3>&#272;&#7893;i m&#225;y kh&#244;ng m&#7845;t d&#7919; li&#7879;u</h3>
               </div>
@@ -316,6 +358,7 @@
       </section>
     </main>
 
+    <div id="toast" class="toast is-hidden" role="status" aria-live="polite"></div>
     <section id="printArea" class="print-area" aria-hidden="true"></section>
 
     <script src="app.js"></script>

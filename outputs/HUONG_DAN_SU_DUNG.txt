@@ -35,19 +35,39 @@ HUONG DAN SU DUNG PT BARBERSHOP POS
 - Quan Li xem duoc tat ca bill, don da huy, bang gia, % chia, nhan vien, lich su ket ca va sao luu du lieu.
 - Thu Ngan chi order, in bill, tinh tien, huy don va ket ca.
 - Don bi huy khong bi xoa khoi he thong, ma hien trang thai Da huy de Quan Li xem lai.
-- Khi huy don da luu, nguoi huy bat buoc nhap ly do.
+- Khi huy don da luu, nguoi huy bat buoc nhap ly do va phai co ma Quan Li duyet.
 - Thu Ngan khong xem duoc ly do/chi tiet huy don. Chi Quan Li moi xem duoc chi tiet huy don.
+- Neu dung ban Render co database, server se chan Thu Ngan neu co tinh xoa bill, sua bill da luu, sua bang gia/nhan vien hoac huy bill khong co ma Quan Li.
+- Quan Li vao Dau ca / Ket ca de xem Nhat ky chong da bill.
 
 7. Chinh gia, dich vu, nhan vien
 - Vao tab Bang gia & % de them/sua gia va % chia nhan vien.
 - Vao tab Nhan vien de them nhan vien.
 - Vao tab Dau ca / Ket ca de nhap tien dau ca, chot ca va sao luu du lieu.
+- Nut In ket ca se chot ca va in phieu ket ca. Sau khi ket ca, doanh thu ca hien tai se ve 0 de mo ca moi.
+- Neu da bam Ket ca truoc do, nut In ket ca se in lai ca vua ket gan nhat.
 
 8. So hoa don va so thu tu
 - Moi bill da luu se co So HD dang HD000001, HD000002...
 - STT cho la so thu tu khach doi cat trong ca hien tai.
-- O Lich su bill co the tim bang So HD, vi du HD000001.
+- Khi tao bill co the nhap ten khach, so dien thoai, nhan vien, ghi chu va phuong thuc thanh toan.
+- O Lich su bill co the tim bang So HD, STT, ten khach, so dien thoai, nhan vien hoac phuong thuc thanh toan.
 
-9. Gui cho nguoi khac
+9. Thanh toan va ket ca nang cao
+- Web co cac phuong thuc: Tien mat, Chuyen khoan, The, Khac.
+- Doanh thu hop le tinh tat ca phuong thuc thanh toan.
+- Tien du kien trong ket chi tinh Tien dau ca + bill Tien mat.
+- Bill Chuyen khoan/The/Khac van tinh doanh thu nhung khong lam tang tien mat trong ket.
+- Phieu ket ca se in ro doanh thu theo Tien mat, Chuyen khoan, The, Khac.
+- Man hinh Order co bang so lieu nhanh: doanh thu ca, STT tiep theo, tien mat trong ca, nhan vien noi bat/so don huy.
+
+10. Chong da bill
+- Bill da luu duoc khoa: khong co nut sua bill, khong co xoa bill.
+- Thu Ngan muon huy bill phai nhap ly do va can ID/mat khau Quan Li duyet.
+- He thong ghi Nhat ky bao mat khi luu bill, huy bill, mo ca, ket ca, khoi phuc du lieu.
+- Quan Li xem duoc ai thao tac, luc nao, voi hoa don nao.
+- Khoa manh nhat la chay ban Render Web Service + Postgres, vi server se tu choi luu du lieu neu Thu Ngan co tinh lam mat bill.
+
+11. Gui cho nguoi khac
 - Chi gui file ZIP khi ban da kiem tra xong.
 - Nguoi nhan giai nen ZIP truoc, sau do mo index.html.

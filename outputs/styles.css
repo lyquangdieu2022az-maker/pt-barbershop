@@ -312,7 +312,7 @@ select:focus {
 
 .status-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(150px, 1fr));
+  grid-template-columns: repeat(4, minmax(142px, 1fr));
   gap: 10px;
 }
 
@@ -342,6 +342,52 @@ select:focus {
   grid-template-columns: minmax(250px, 0.86fr) minmax(330px, 1.1fr) minmax(310px, 0.95fr);
   gap: 16px;
   align-items: start;
+}
+
+.stats-ribbon {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.metric-tile {
+  min-height: 118px;
+  display: grid;
+  align-content: space-between;
+  gap: 8px;
+  border: 1px solid rgba(15, 95, 184, 0.22);
+  border-top: 4px solid var(--blue);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.97), rgba(220, 236, 255, 0.78)),
+    #ffffff;
+  padding: 14px;
+  box-shadow: 0 12px 30px rgba(15, 35, 68, 0.1);
+}
+
+.metric-tile.accent-red {
+  border-top-color: var(--red);
+}
+
+.metric-tile.accent-blue {
+  border-top-color: var(--blue-dark);
+}
+
+.metric-tile.is-muted {
+  border-top-color: var(--line);
+}
+
+.metric-tile span,
+.metric-tile small {
+  color: var(--muted);
+  font-weight: 850;
+}
+
+.metric-tile strong {
+  color: var(--charcoal);
+  font-size: 22px;
+  line-height: 1.1;
 }
 
 .panel {
@@ -574,7 +620,7 @@ select:focus {
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 1060px;
+  min-width: 1160px;
 }
 
 th,
@@ -670,6 +716,26 @@ th {
   display: none;
 }
 
+.toast {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 50;
+  max-width: min(360px, calc(100vw - 36px));
+  border: 1px solid rgba(15, 95, 184, 0.28);
+  border-left: 5px solid var(--ok);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--charcoal);
+  padding: 13px 15px;
+  box-shadow: var(--shadow);
+  font-weight: 900;
+}
+
+.toast.danger {
+  border-left-color: var(--danger);
+}
+
 .receipt {
   width: 320px;
   color: #000;
@@ -730,6 +796,11 @@ th {
     grid-template-columns: 1fr;
   }
 
+  .status-grid,
+  .stats-ribbon {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .sidebar {
     position: static;
     height: auto;
@@ -763,6 +834,7 @@ th {
   }
 
   .status-grid,
+  .stats-ribbon,
   .field-grid,
   .history-tools,
   .search-field,
