@@ -26,6 +26,15 @@ Render se doc file `render.yaml` san co va tao:
 
 Khong chon `Static Site` neu muon may tinh/iPhone tu dong dong bo.
 
+## Cai thanh app tren iPhone/Android
+
+Ban web nay da duoc cau hinh nhu app PWA:
+
+- Android: mo link HTTPS tren Chrome, bam nut `Cai app` trong web hoac menu Chrome -> `Cai dat ung dung`.
+- iPhone: mo link HTTPS bang Safari, bam nut Chia se, chon `Them vao Man hinh chinh`.
+- Sau khi cai, man hinh dien thoai se co icon `PT Barber` va mo toan man hinh nhu app.
+- Day la cach mien phi, khong can tai khoan App Store hoac CH Play.
+
 ## Neu can nhap thu cong tren Render
 
 Chon `New +` -> `Web Service`:

@@ -23,6 +23,27 @@ let dbReady = false;
 
 app.use(express.json({ limit: "5mb" }));
 
+app.use((req, res, next) => {
+  const origin = req.get("Origin");
+  if (origin) {
+    res.set("Access-Control-Allow-Origin", origin);
+    res.set("Vary", "Origin");
+  }
+  res.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.set("Access-Control-Allow-Headers", [
+    "Content-Type",
+    "X-PT-User",
+    "X-PT-Password",
+    "X-PT-Manager-User",
+    "X-PT-Manager-Password"
+  ].join(", "));
+  if (req.method === "OPTIONS") {
+    res.sendStatus(204);
+    return;
+  }
+  next();
+});
+
 function requireAuth(req, res, next) {
   const id = String(req.get("X-PT-User") || "");
   const password = String(req.get("X-PT-Password") || "");
