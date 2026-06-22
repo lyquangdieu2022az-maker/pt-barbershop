@@ -578,7 +578,9 @@ async function createCloudAccountGroup(payload) {
   });
   if (!response.ok) {
     const errorPayload = await response.json().catch(() => ({}));
-    throw new Error(errorPayload.error || "Không tạo được tài khoản online.");
+    const error = new Error(errorPayload.error || "Không tạo được tài khoản online.");
+    error.status = response.status;
+    throw error;
   }
   return response.json();
 }
@@ -591,7 +593,9 @@ async function updateCloudAccountGroup(workspaceId, payload) {
   });
   if (!response.ok) {
     const errorPayload = await response.json().catch(() => ({}));
-    throw new Error(errorPayload.error || "Không sửa được tài khoản online.");
+    const error = new Error(errorPayload.error || "Không sửa được tài khoản online.");
+    error.status = response.status;
+    throw error;
   }
   return response.json();
 }
@@ -603,7 +607,9 @@ async function deleteCloudAccountGroup(workspaceId) {
   });
   if (!response.ok) {
     const errorPayload = await response.json().catch(() => ({}));
-    throw new Error(errorPayload.error || "Không xóa được tài khoản online.");
+    const error = new Error(errorPayload.error || "Không xóa được tài khoản online.");
+    error.status = response.status;
+    throw error;
   }
   return response.json();
 }
@@ -1143,13 +1149,14 @@ function renderAccountGroups() {
     ].join(" ").toLowerCase();
     return !term || searchable.includes(term);
   });
+  const totalText = `<p class="backup-status account-limit-note">Đang có ${accountState.groups.length} bộ tài khoản. Có thể tạo không giới hạn chi nhánh, chỉ cần ID không trùng.</p>`;
 
   if (!groups.length) {
-    container.innerHTML = `<p class="empty-state">Không tìm thấy tài khoản phù hợp.</p>`;
+    container.innerHTML = `${totalText}<p class="empty-state">Không tìm thấy tài khoản phù hợp.</p>`;
     return;
   }
 
-  container.innerHTML = groups.map((group) => {
+  container.innerHTML = `${totalText}${groups.map((group) => {
     const manager = accountState.users.find((user) => user.workspaceId === group.workspaceId && ["admin", "manager"].includes(user.role));
     const cashier = accountState.users.find((user) => user.workspaceId === group.workspaceId && user.role === "cashier");
     const current = group.workspaceId === activeWorkspaceId();
@@ -1166,7 +1173,7 @@ function renderAccountGroups() {
         </span>
       </div>
     `;
-  }).join("");
+  }).join("")}`;
 }
 
 function resetAccountForm() {
@@ -1174,7 +1181,42 @@ function resetAccountForm() {
   $("#accountWorkspaceId").value = "";
   $("#accountSubmitBtn").textContent = "Tạo bộ tài khoản";
   $("#accountCancelEditBtn").classList.add("is-hidden");
-  $("#accountStatus").textContent = "Mỗi bộ có bill, doanh thu và kết ca riêng.";
+  $("#accountStatus").textContent = "Tạo không giới hạn chi nhánh, chỉ cần ID không trùng nhau.";
+}
+
+function accountIdExists(id, exceptWorkspaceId = "") {
+  return accountState.users.some((user) => user.workspaceId !== exceptWorkspaceId && user.id === id);
+}
+
+function nextAccountCredentials() {
+  const exceptWorkspaceId = $("#accountWorkspaceId")?.value || "";
+  let serial = Math.max(2, accountState.groups.length + 1);
+
+  while (true) {
+    const suffix = String(serial).padStart(2, "0");
+    const managerId = `9939${suffix}`;
+    const cashierId = `3122${suffix}`;
+    if (!accountIdExists(managerId, exceptWorkspaceId) && !accountIdExists(cashierId, exceptWorkspaceId)) {
+      return { suffix, managerId, cashierId };
+    }
+    serial += 1;
+  }
+}
+
+function generateAccountCredentials() {
+  if (!isAdmin()) return;
+  if ($("#accountWorkspaceId").value) {
+    resetAccountForm();
+  }
+  const next = nextAccountCredentials();
+  $("#accountWorkspaceName").value = `Chi nhánh ${next.suffix}`;
+  $("#accountManagerId").value = next.managerId;
+  $("#accountManagerPassword").value = `040426${next.suffix}`;
+  $("#accountCashierId").value = next.cashierId;
+  $("#accountCashierPassword").value = `152004${next.suffix}`;
+  $("#accountStatus").textContent = `Đã tạo sẵn ID cho Chi nhánh ${next.suffix}. Bấm Tạo bộ tài khoản để lưu.`;
+  $("#accountManagerId").focus();
+  showToast("Đã tạo ID tự động");
 }
 
 function fillAccountForm(workspaceId) {
@@ -1667,7 +1709,7 @@ async function createAccountGroup(event) {
   }
 
   const editWorkspaceId = $("#accountWorkspaceId").value;
-  const workspaceName = $("#accountWorkspaceName").value.trim() || `Bo tai khoan ${accountState.groups.length + 1}`;
+  const workspaceName = $("#accountWorkspaceName").value.trim() || `Chi nhánh ${String(accountState.groups.length + 1).padStart(2, "0")}`;
   const managerId = $("#accountManagerId").value.trim();
   const managerPassword = $("#accountManagerPassword").value.trim();
   const cashierId = $("#accountCashierId").value.trim();
@@ -1694,7 +1736,12 @@ async function createAccountGroup(event) {
     created = editWorkspaceId
       ? await updateCloudAccountGroup(editWorkspaceId, payload)
       : await createCloudAccountGroup(payload);
-  } catch {
+  } catch (error) {
+    if (error.status === 409) {
+      $("#accountStatus").textContent = "ID này đã tồn tại trên hệ thống online. Bấm Tạo ID tự động hoặc nhập ID khác.";
+      showToast("ID đã tồn tại", "danger");
+      return;
+    }
     const workspaceId = editWorkspaceId || `pt-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 6)}`;
     const existingAdmin = accountState.users.find((user) => user.workspaceId === workspaceId && user.role === "admin");
     created = {
@@ -1721,7 +1768,7 @@ async function createAccountGroup(event) {
   renderAccountGroups();
   $("#accountStatus").textContent = created.online === false
     ? "Đã tạo trên máy này. Muốn máy khác dùng chung, hãy chạy bản Render có database."
-    : editWorkspaceId ? "Đã cập nhật tài khoản." : "Đã tạo bộ tài khoản riêng. Mỗi bộ có doanh thu và bill riêng.";
+    : editWorkspaceId ? "Đã cập nhật tài khoản." : "Đã tạo bộ tài khoản riêng. Có thể tạo thêm không giới hạn, miễn ID không trùng.";
   showToast(editWorkspaceId ? "Đã sửa tài khoản" : "Đã tạo bộ tài khoản");
 }
 
@@ -1962,6 +2009,7 @@ $("#backupFileInput").addEventListener("change", (event) => {
 });
 
 $("#accountGroupForm").addEventListener("submit", createAccountGroup);
+$("#accountAutoFillBtn").addEventListener("click", generateAccountCredentials);
 $("#accountCancelEditBtn").addEventListener("click", resetAccountForm);
 $("#accountSearch").addEventListener("input", renderAccountGroups);
 $("#accountGroupList").addEventListener("click", async (event) => {

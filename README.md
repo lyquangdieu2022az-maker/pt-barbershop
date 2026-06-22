@@ -63,7 +63,9 @@ Neu dau trang hien `Dong bo: Luu tren may nay`, backend/database chua ket noi ne
 - Dang nhap Admin bang `9939` / `040426`.
 - Vao tab `Tai khoan`.
 - Co the tim theo ID, ten bo/chi nhanh hoac vai tro.
-- Co the tao bo tai khoan moi, sua ID/mat khau va xoa bo tai khoan khac.
+- Co the tao khong gioi han bo tai khoan/chi nhanh, sua ID/mat khau va xoa bo tai khoan khac.
+- Co nut `Tao ID tu dong cho chi nhanh moi` de he thong tu dien ID Quan Li, ID Thu Ngan va mat khau mau.
+- Dieu kien duy nhat la ID khong duoc trung nhau trong toan he thong.
 - Khong xoa duoc bo tai khoan dang dang nhap.
 - Moi bo tai khoan co bill, doanh thu, dau ca/ket ca va nhan vien rieng.
 - Bo 1 va bo 2 khong anh huong doanh thu cua nhau.
