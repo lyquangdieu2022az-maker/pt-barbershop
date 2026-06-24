@@ -35,9 +35,7 @@ app.use((req, res, next) => {
   res.set("Access-Control-Allow-Headers", [
     "Content-Type",
     "X-PT-User",
-    "X-PT-Password",
-    "X-PT-Manager-User",
-    "X-PT-Manager-Password"
+    "X-PT-Password"
   ].join(", "));
   if (req.method === "OPTIONS") {
     res.sendStatus(204);
@@ -91,13 +89,6 @@ async function requireAuth(req, res, next) {
   next();
 }
 
-async function managerApproved(req) {
-  const id = String(req.get("X-PT-Manager-User") || "");
-  const password = String(req.get("X-PT-Manager-Password") || "");
-  const user = await findUser(id, password).catch(() => null);
-  return Boolean(user && ["admin", "manager"].includes(user.role) && user.workspaceId === req.user.workspaceId);
-}
-
 function stableStringify(value) {
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
   if (value && typeof value === "object") {
@@ -135,6 +126,61 @@ function billCore(bill = {}) {
   };
 }
 
+function cancelRequestCore(request = {}) {
+  return {
+    id: request.id || "",
+    billId: request.billId || "",
+    invoiceNo: request.invoiceNo || "",
+    reason: request.reason || "",
+    requestedAt: request.requestedAt || "",
+    requestedById: request.requestedById || "",
+    requestedBy: request.requestedBy || "",
+    status: request.status || "pending",
+    resolvedAt: request.resolvedAt || "",
+    resolvedById: request.resolvedById || "",
+    resolvedBy: request.resolvedBy || "",
+    resolutionNote: request.resolutionNote || ""
+  };
+}
+
+function requireCashierCancelRequestUpdate(previous, next, req) {
+  const previousRequests = new Map((previous.cancelRequests || []).map((request) => [request.id, request]));
+  const nextRequests = new Map((next.cancelRequests || []).map((request) => [request.id, request]));
+  const previousBills = new Map((previous.bills || []).map((bill) => [bill.id, bill]));
+  const pendingBillIds = new Set((previous.cancelRequests || [])
+    .filter((request) => request.status === "pending")
+    .map((request) => request.billId));
+
+  for (const oldRequest of previous.cancelRequests || []) {
+    const nextRequest = nextRequests.get(oldRequest.id);
+    if (!nextRequest) throw securityError("Cashier cannot delete a cancellation request.");
+    if (stableStringify(cancelRequestCore(oldRequest)) !== stableStringify(cancelRequestCore(nextRequest))) {
+      throw securityError("Cashier cannot edit a cancellation request.");
+    }
+  }
+
+  for (const request of next.cancelRequests || []) {
+    if (previousRequests.has(request.id)) continue;
+    const bill = previousBills.get(request.billId);
+    if (!request.id || !bill || bill.status === "canceled") {
+      throw securityError("Invalid cancellation request.");
+    }
+    if (!previous.shift?.isOpen || bill.shiftId !== previous.shift.id) {
+      throw securityError("Cashier can request cancellation only during the active shift.");
+    }
+    if (request.status !== "pending" || !String(request.reason || "").trim()) {
+      throw securityError("Cancellation request requires a reason and pending status.");
+    }
+    if (String(request.invoiceNo || "") !== String(bill.invoiceNo || "") || String(request.requestedById || "") !== String(req.user.id)) {
+      throw securityError("Invalid cancellation request details.");
+    }
+    if (pendingBillIds.has(request.billId)) {
+      throw securityError("This bill already has a pending cancellation request.");
+    }
+    pendingBillIds.add(request.billId);
+  }
+}
+
 function requireCashierSafeUpdate(previous, next, req) {
   if (!previous) return;
 
@@ -148,12 +194,17 @@ function requireCashierSafeUpdate(previous, next, req) {
     throw securityError("Bảo mật: Thu Ngân không được sửa bảng giá.");
   }
 
+  requireCashierCancelRequestUpdate(previous, next, req);
+
   const nextBills = new Map((next.bills || []).map((bill) => [bill.id, bill]));
   for (const oldBill of previous.bills || []) {
     const newBill = nextBills.get(oldBill.id);
     if (!newBill) throw securityError(`Bảo mật: Bill ${oldBill.invoiceNo || oldBill.id} không được xóa.`);
     if (stableStringify(billCore(oldBill)) !== stableStringify(billCore(newBill))) {
       throw securityError(`Bảo mật: Bill ${oldBill.invoiceNo || oldBill.id} đã khóa, không được sửa.`);
+    }
+    if (newBill.status === oldBill.status && stableStringify(oldBill) !== stableStringify(newBill)) {
+      throw securityError("Saved bill cannot be edited.");
     }
     if (oldBill.status === "canceled") {
       if (stableStringify(oldBill) !== stableStringify(newBill)) {
@@ -162,14 +213,7 @@ function requireCashierSafeUpdate(previous, next, req) {
       continue;
     }
     if (newBill.status !== oldBill.status) {
-      const isCancel = oldBill.status !== "canceled" && newBill.status === "canceled";
-      if (!isCancel) throw securityError(`Bảo mật: Trạng thái bill ${oldBill.invoiceNo || oldBill.id} không hợp lệ.`);
-      if (!req.managerApproved) {
-        throw securityError("Bảo mật: Hủy bill cần Quản Lý duyệt.");
-      }
-      if (!String(newBill.cancelReason || "").trim()) {
-        throw securityError("Bảo mật: Hủy bill phải có lý do.");
-      }
+      throw securityError(`Bảo mật: Thu Ngân không được đổi trạng thái bill ${oldBill.invoiceNo || oldBill.id}.`);
     }
   }
 
@@ -554,7 +598,6 @@ app.post("/api/state", requireAuth, async (req, res, next) => {
     const previousResult = await pool.query("SELECT data FROM workspace_states WHERE workspace_id = $1", [req.user.workspaceId]);
     const previous = previousResult.rows[0]?.data || null;
     if (!["admin", "manager"].includes(req.user.role)) {
-      req.managerApproved = await managerApproved(req);
       requireCashierSafeUpdate(previous, data, req);
     }
     const result = await pool.query(

@@ -78,8 +78,9 @@ Neu dau trang hien `Dong bo: Luu tren may nay`, backend/database chua ket noi ne
 - STT cho la so thu tu khach doi cat trong ca hien tai.
 - Co the nhap so dien thoai khach va phuong thuc thanh toan khi tao bill.
 - Lich su bill co o tim So HD, STT, ten khach, so dien thoai, nhan vien hoac phuong thuc thanh toan.
-- Khi huy bill da luu phai nhap ly do va can ma Quan Li duyet.
+- Thu Ngan huy bill chi can nhap ly do. He thong gui yeu cau den Quan Li/Admin de duyet hoac tu choi tren tai khoan dang nhap cua ho.
 - Thu Ngan khong xem duoc chi tiet huy bill; chi Quan Li moi xem duoc.
+- Khi dung Render + Postgres va co Internet, yeu cau huy se tu dong hien tren thiet bi dang dang nhap Quan Li/Admin. Thu Ngan khong can biet hoac nhap mat khau Quan Li.
 
 ## In bill tinh tien
 
@@ -93,10 +94,10 @@ Neu dau trang hien `Dong bo: Luu tren may nay`, backend/database chua ket noi ne
 - Bill da luu duoc khoa: khong co sua bill va khong co xoa bill.
 - Nut `In bill` se luu hoa don vao he thong truoc roi moi in, khong con in hoa don nhap.
 - Sau khi da in/luu, `Xoa dich vu` chi xoa bill dang soan moi, khong xoa duoc hoa don da luu.
-- Thu Ngan muon huy bill phai nhap ly do va ID/mat khau Quan Li.
+- Thu Ngan muon huy bill chi nhap ly do; khong can va khong duoc nhap ID/mat khau Quan Li.
 - Quan Li xem duoc `Nhat ky chong da bill` trong tab `Dau ca / Ket ca`.
 - Nhat ky ghi lai luu bill, huy bill, mo ca, ket ca va khoi phuc du lieu.
-- Neu chay bang Render Web Service + Postgres, server se chan Thu Ngan neu co tinh xoa bill, sua bill cu, sua bang gia/nhan vien hoac huy bill khong co ma Quan Li.
+- Neu chay bang Render Web Service + Postgres, server se chan Thu Ngan neu co tinh xoa bill, sua bill cu, sua bang gia/nhan vien hoac huy bill truc tiep. Thu Ngan chi duoc tao yeu cau huy bill dang cho Quan Li/Admin duyet.
 
 ## Thanh toan
 
@@ -111,3 +112,12 @@ Neu dau trang hien `Dong bo: Luu tren may nay`, backend/database chua ket noi ne
 - Nut `In ket ca` se chot ca, in phieu ket ca, roi dua doanh thu ca hien tai ve 0.
 - Neu da chot ca truoc do, `In ket ca` se in lai ca vua ket gan nhat.
 - Phieu ket ca in ro doanh thu theo tien mat, chuyen khoan, the va khac.
+
+## Bao cao Excel
+
+- Admin va Quan Li co nut `Xuat Excel 30 ngay` trong tab `Dau ca / Ket ca`.
+- File `.xlsx` co phong cach PT Barbershop, ten thuong hieu va chi nhanh dang dang nhap.
+- File gom 4 tab: `Tong hop 30 ngay`, `Chi tiet bill`, `Chia tho theo ngay`, `Tong chia tung tho`.
+- Chi tiet bill co so HD, khach, tho cat/lam, dich vu, thanh toan, doanh thu, % chia, tien chia va trang thai huy.
+- Khi Admin/Quan Li bam `Ket ca`, doanh thu ca moi ve 0 va Excel chi tiet cua ca vua chot duoc tao san. Bam `Tai Excel ket ca` de luu file vao may.
+- Bill va nhat ky bao mat van duoc khoa tren he thong sau Ket ca de giu chong da bill.

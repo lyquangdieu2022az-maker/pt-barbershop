@@ -187,6 +187,16 @@
             </div>
             <div id="billCards" class="bill-cards"></div>
           </section>
+          <section id="cancelApprovalPanel" class="panel is-hidden" data-manager-only>
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Ph&#234; duy&#7879;t</p>
+                <h3>Y&#234;u c&#7847;u h&#7911;y bill</h3>
+              </div>
+              <span id="cancelApprovalCount" class="scope-badge">0 y&#234;u c&#7847;u</span>
+            </div>
+            <div id="cancelApprovalList" class="summary-list"></div>
+          </section>
         </section>
 
         <section id="tab-catalog" class="tab-panel is-hidden" data-manager-only>
@@ -368,6 +378,21 @@
                 <tbody id="shiftLogBody"></tbody>
               </table>
             </div>
+          </section>
+          <section class="panel excel-report-panel" data-manager-only>
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">B&#225;o c&#225;o</p>
+                <h3>Excel 30 ng&#224;y</h3>
+              </div>
+              <span class="scope-badge">Theo chi nh&#225;nh &#273;ang &#273;&#259;ng nh&#7853;p</span>
+            </div>
+            <div class="excel-report-actions">
+              <span id="excelReportScope" class="report-scope"></span>
+              <button id="downloadShiftExcelBtn" class="ghost-button is-hidden" type="button">T&#7843;i Excel k&#7871;t ca</button>
+              <button id="exportExcelBtn" class="primary-button" type="button">Xu&#7845;t Excel 30 ng&#224;y</button>
+            </div>
+            <p id="excelExportStatus" class="backup-status">B&#225;o c&#225;o g&#7891;m t&#7893;ng h&#7907;p ng&#224;y, chi ti&#7871;t bill v&#224; ti&#7873;n chia th&#7907;.</p>
           </section>
           <section class="panel" data-manager-only>
             <div class="panel-head">

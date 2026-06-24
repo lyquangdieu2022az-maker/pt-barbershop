@@ -67,6 +67,7 @@ const defaultState = {
   ],
   selectedServiceIds: [],
   bills: [],
+  cancelRequests: [],
   shift: {
     id: "",
     isOpen: false,
@@ -100,8 +101,8 @@ let applyingRemoteState = false;
 let lastRemoteUpdatedAt = "";
 let syncOnline = false;
 let toastTimer = null;
-let pendingManagerApproval = null;
 let deferredInstallPrompt = null;
+let pendingShiftExcel = null;
 
 const $ = (selector) => document.querySelector(selector);
 const money = (value) => new Intl.NumberFormat("vi-VN").format(Number(value || 0)) + " VND";
@@ -312,6 +313,20 @@ function normalizeState(nextState) {
   nextState.staff = Array.isArray(nextState.staff) ? nextState.staff : structuredClone(defaultState.staff);
   nextState.services = Array.isArray(nextState.services) ? nextState.services : structuredClone(defaultState.services);
   nextState.selectedServiceIds = Array.isArray(nextState.selectedServiceIds) ? nextState.selectedServiceIds : [];
+  nextState.cancelRequests = Array.isArray(nextState.cancelRequests) ? nextState.cancelRequests.map((request) => ({
+    id: request.id || crypto.randomUUID(),
+    billId: request.billId || "",
+    invoiceNo: request.invoiceNo || "",
+    reason: request.reason || "",
+    requestedAt: request.requestedAt || new Date().toISOString(),
+    requestedById: request.requestedById || "",
+    requestedBy: request.requestedBy || "Thu Ngân",
+    status: ["pending", "approved", "rejected"].includes(request.status) ? request.status : "pending",
+    resolvedAt: request.resolvedAt || "",
+    resolvedById: request.resolvedById || "",
+    resolvedBy: request.resolvedBy || "",
+    resolutionNote: request.resolutionNote || ""
+  })) : [];
   nextState.securityLog = Array.isArray(nextState.securityLog) ? nextState.securityLog.map((entry) => ({
     id: entry.id || crypto.randomUUID(),
     createdAt: entry.createdAt || new Date().toISOString(),
@@ -426,6 +441,7 @@ function businessState() {
     staff: state.staff,
     services: state.services,
     bills: state.bills,
+    cancelRequests: state.cancelRequests,
     shift: state.shift,
     shiftLogs: state.shiftLogs,
     securityLog: state.securityLog
@@ -436,6 +452,7 @@ function hasBusinessData(data = businessState()) {
   return Boolean(
     Number(data.invoiceCounter || 0) ||
     (Array.isArray(data.bills) && data.bills.length) ||
+    (Array.isArray(data.cancelRequests) && data.cancelRequests.length) ||
     (Array.isArray(data.shiftLogs) && data.shiftLogs.length) ||
     (Array.isArray(data.securityLog) && data.securityLog.length) ||
     data.shift?.isOpen ||
@@ -501,36 +518,6 @@ function logSecurity(action, detail = "", bill = null) {
     detail
   });
   state.securityLog = state.securityLog.slice(0, SECURITY_LOG_LIMIT);
-}
-
-function managerUser() {
-  return accountState.users.find((user) => {
-    return ["admin", "manager"].includes(user.role) && user.workspaceId === activeWorkspaceId();
-  });
-}
-
-function requestManagerApproval(actionText) {
-  if (isManager()) {
-    const manager = managerUser();
-    if (!manager) return null;
-    return { id: manager.id, name: manager.name, password: manager.password };
-  }
-
-  const id = prompt(`Cần Quản Lý duyệt để ${actionText}.\nNhập ID Quản Lý:`);
-  if (id === null) return null;
-  const password = prompt("Nhập mật khẩu Quản Lý:");
-  if (password === null) return null;
-
-  const manager = managerUser();
-  if (!manager || id.trim() !== manager.id || password !== manager.password) {
-    alert("Mã Quản Lý không đúng. Bill chưa bị hủy.");
-    logSecurity("Chặn hủy bill", `Sai mã Quản Lý khi ${actionText}`);
-    saveState();
-    return null;
-  }
-
-  pendingManagerApproval = { id: manager.id, password: manager.password };
-  return { id: manager.id, name: manager.name, password: manager.password };
 }
 
 async function fetchCloudState() {
@@ -615,14 +602,9 @@ async function deleteCloudAccountGroup(workspaceId) {
 }
 
 async function pushCloudState() {
-  const headers = syncHeaders();
-  if (pendingManagerApproval) {
-    headers["X-PT-Manager-User"] = pendingManagerApproval.id;
-    headers["X-PT-Manager-Password"] = pendingManagerApproval.password;
-  }
   const response = await fetch(apiUrl("/api/state"), {
     method: "POST",
-    headers,
+    headers: syncHeaders(),
     body: JSON.stringify({ data: businessState() })
   });
   if (!response.ok) {
@@ -633,7 +615,6 @@ async function pushCloudState() {
     throw new Error(payload.error || "Sync save failed");
   }
   const payload = await response.json();
-  pendingManagerApproval = null;
   lastRemoteUpdatedAt = payload.updatedAt || lastRemoteUpdatedAt;
   setSyncStatus("Online", true);
 }
@@ -698,6 +679,7 @@ function dataForBackup() {
     staff: state.staff,
     services: state.services,
     bills: state.bills,
+    cancelRequests: state.cancelRequests,
     shift: state.shift,
     shiftLogs: state.shiftLogs,
     securityLog: state.securityLog
@@ -743,6 +725,677 @@ function downloadBackup() {
   link.remove();
   URL.revokeObjectURL(link.href);
   setBackupStatus("Đã tải file sao lưu. Hãy giữ file này trong USB, Zalo, Google Drive hoặc iCloud.");
+}
+
+const EXCEL_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+function excelDayKey(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function excelDateFromKey(key) {
+  const [year, month, day] = String(key).split("-").map(Number);
+  return new Date(year, (month || 1) - 1, day || 1);
+}
+
+function excelDateLabel(key) {
+  const date = excelDateFromKey(key);
+  return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
+}
+
+function excelTimeLabel(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function lastThirtyExcelDays() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = [];
+  for (let offset = 29; offset >= 0; offset -= 1) {
+    const date = new Date(today);
+    date.setDate(today.getDate() - offset);
+    days.push(excelDayKey(date));
+  }
+  return days;
+}
+
+function reportBranchName() {
+  return String(state.session?.workspaceName || "PT Barbershop").trim() || "PT Barbershop";
+}
+
+function reportRoleLabel() {
+  return isAdmin() ? "Admin" : "Quản Lý";
+}
+
+function setExcelExportStatus(message) {
+  const element = $("#excelExportStatus");
+  if (element) element.textContent = message;
+}
+
+function renderExcelReportInfo() {
+  const element = $("#excelReportScope");
+  if (element) {
+    const days = lastThirtyExcelDays();
+    element.textContent = `${branchBrandName(reportBranchName())} | ${excelDateLabel(days[0])} - ${excelDateLabel(days[days.length - 1])}`;
+  }
+  const shiftButton = $("#downloadShiftExcelBtn");
+  if (shiftButton) {
+    const belongsToCurrentWorkspace = pendingShiftExcel?.workspaceId === activeWorkspaceId();
+    shiftButton.classList.toggle("is-hidden", !pendingShiftExcel || !isManager() || !belongsToCurrentWorkspace);
+  }
+}
+
+function excelEscape(value) {
+  return String(value ?? "").replace(/[&<>\"]/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;"
+  }[character]));
+}
+
+function excelColumnName(index) {
+  let current = Number(index) + 1;
+  let name = "";
+  while (current > 0) {
+    const remainder = (current - 1) % 26;
+    name = String.fromCharCode(65 + remainder) + name;
+    current = Math.floor((current - 1) / 26);
+  }
+  return name;
+}
+
+function excelCellXml(columnIndex, rowNumber, value, style = 0) {
+  if (value === null || value === undefined) return "";
+  const reference = `${excelColumnName(columnIndex)}${rowNumber}`;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return `<c r="${reference}" s="${style}"><v>${value}</v></c>`;
+  }
+  const text = String(value);
+  const preserveSpace = /^\s|\s$/.test(text) ? " xml:space=\"preserve\"" : "";
+  return `<c r="${reference}" s="${style}" t="inlineStr"><is><t${preserveSpace}>${excelEscape(text)}</t></is></c>`;
+}
+
+function excelRowXml(rowNumber, cells, options = {}) {
+  const height = options.height ? ` ht="${options.height}" customHeight="1"` : "";
+  return `<row r="${rowNumber}"${height}>${cells.join("")}</row>`;
+}
+
+function excelNormalizeRow(values, columnCount) {
+  return Array.from({ length: columnCount }, (_, index) => values[index] ?? "");
+}
+
+function excelCellStyle(columnIndex, row, options) {
+  const isCanceled = row?.kind === "canceled";
+  if (options.currencyColumns.includes(columnIndex)) return isCanceled ? 12 : 6;
+  if (options.percentageColumns.includes(columnIndex)) return isCanceled ? 14 : 11;
+  if (options.numberColumns.includes(columnIndex)) return isCanceled ? 13 : 7;
+  return isCanceled ? 10 : 5;
+}
+
+function excelSheetXml(options) {
+  const columnCount = options.headers.length;
+  const lastColumn = excelColumnName(columnCount - 1);
+  const headerRow = 6;
+  const sourceRows = options.rows.length
+    ? options.rows
+    : [{ values: ["Chưa có dữ liệu trong 30 ngày gần nhất"], kind: "empty" }];
+  const rows = [];
+  rows.push(excelRowXml(1, [excelCellXml(0, 1, options.title, 1)], { height: 30 }));
+  rows.push(excelRowXml(2, [excelCellXml(0, 2, options.subtitle, 2)], { height: 22 }));
+  rows.push(excelRowXml(3, []));
+  rows.push(excelRowXml(4, [excelCellXml(0, 4, options.info, 3)], { height: 20 }));
+  rows.push(excelRowXml(5, []));
+  rows.push(excelRowXml(
+    headerRow,
+    options.headers.map((header, index) => excelCellXml(index, headerRow, header, 4)),
+    { height: 30 }
+  ));
+
+  sourceRows.forEach((row, rowIndex) => {
+    const rowNumber = headerRow + 1 + rowIndex;
+    const values = excelNormalizeRow(row.values || [], columnCount);
+    rows.push(excelRowXml(
+      rowNumber,
+      values.map((value, columnIndex) => excelCellXml(
+        columnIndex,
+        rowNumber,
+        value,
+        excelCellStyle(columnIndex, row, options)
+      )),
+      { height: 23 }
+    ));
+  });
+
+  const dataEndRow = headerRow + sourceRows.length;
+  let totalRowXml = "";
+  if (options.totalRow?.values) {
+    const totalRowNumber = dataEndRow + 1;
+    const values = excelNormalizeRow(options.totalRow.values, columnCount);
+    totalRowXml = excelRowXml(
+      totalRowNumber,
+      values.map((value, columnIndex) => {
+        const style = options.currencyColumns.includes(columnIndex) ? 9 : 8;
+        return excelCellXml(columnIndex, totalRowNumber, value, style);
+      }),
+      { height: 24 }
+    );
+  }
+
+  const columns = options.widths.map((width, index) => {
+    const column = index + 1;
+    return `<col min="${column}" max="${column}" width="${width}" customWidth="1"/>`;
+  }).join("");
+  const autoFilter = options.autoFilter === false ? "" : `<autoFilter ref="A${headerRow}:${lastColumn}${dataEndRow}"/>`;
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheetViews><sheetView workbookViewId="0"><pane ySplit="6" topLeftCell="A7" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
+  <sheetFormatPr defaultRowHeight="18"/>
+  <cols>${columns}</cols>
+  <sheetData>${rows.join("")}${totalRowXml}</sheetData>
+  ${autoFilter}
+  <mergeCells count="3"><mergeCell ref="A1:${lastColumn}1"/><mergeCell ref="A2:${lastColumn}2"/><mergeCell ref="A4:${lastColumn}4"/></mergeCells>
+  <pageMargins left="0.3" right="0.3" top="0.5" bottom="0.5" header="0.2" footer="0.2"/>
+  <pageSetup orientation="landscape" paperSize="9" fitToWidth="1" fitToHeight="0"/>
+</worksheet>`;
+}
+
+function excelStylesXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <numFmts count="2">
+    <numFmt numFmtId="164" formatCode="#\,##0 &quot;VND&quot;"/>
+    <numFmt numFmtId="165" formatCode="0.0&quot;%&quot;"/>
+  </numFmts>
+  <fonts count="4">
+    <font><sz val="11"/><color rgb="FF101820"/><name val="Times New Roman"/><family val="1"/></font>
+    <font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Times New Roman"/><family val="1"/></font>
+    <font><b/><sz val="16"/><color rgb="FFFFFFFF"/><name val="Times New Roman"/><family val="1"/></font>
+    <font><b/><sz val="11"/><color rgb="FF101820"/><name val="Times New Roman"/><family val="1"/></font>
+  </fonts>
+  <fills count="8">
+    <fill><patternFill patternType="none"/></fill>
+    <fill><patternFill patternType="gray125"/></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF080B10"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFC9282D"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF0F5FB8"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFDCEEFF"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFF8FAFC"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFFFE3E5"/><bgColor indexed="64"/></patternFill></fill>
+  </fills>
+  <borders count="2">
+    <border><left/><right/><top/><bottom/><diagonal/></border>
+    <border><left style="thin"><color rgb="FFD7E0EA"/></left><right style="thin"><color rgb="FFD7E0EA"/></right><top style="thin"><color rgb="FFD7E0EA"/></top><bottom style="thin"><color rgb="FFD7E0EA"/></bottom><diagonal/></border>
+  </borders>
+  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+  <cellXfs count="15">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="2" fillId="2" borderId="0" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="1" fillId="3" borderId="0" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="3" fillId="5" borderId="0" applyAlignment="1"><alignment vertical="center"/></xf>
+    <xf numFmtId="0" fontId="1" fillId="4" borderId="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
+    <xf numFmtId="164" fontId="0" fillId="0" borderId="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="top"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyAlignment="1"><alignment horizontal="right" vertical="top"/></xf>
+    <xf numFmtId="0" fontId="1" fillId="2" borderId="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
+    <xf numFmtId="164" fontId="1" fillId="2" borderId="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="7" borderId="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
+    <xf numFmtId="165" fontId="0" fillId="0" borderId="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="top"/></xf>
+    <xf numFmtId="164" fontId="0" fillId="7" borderId="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="top"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="7" borderId="1" applyAlignment="1"><alignment horizontal="right" vertical="top"/></xf>
+    <xf numFmtId="165" fontId="0" fillId="7" borderId="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="top"/></xf>
+  </cellXfs>
+  <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+  <tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"/>
+</styleSheet>`;
+}
+
+function excelCrc32(bytes) {
+  let crc = 0xFFFFFFFF;
+  for (let index = 0; index < bytes.length; index += 1) {
+    crc ^= bytes[index];
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ (0xEDB88320 & -(crc & 1));
+    }
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+function excelConcatBytes(parts) {
+  const length = parts.reduce((sum, part) => sum + part.length, 0);
+  const output = new Uint8Array(length);
+  let offset = 0;
+  parts.forEach((part) => {
+    output.set(part, offset);
+    offset += part.length;
+  });
+  return output;
+}
+
+function excelDosTime(date) {
+  return (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2);
+}
+
+function excelDosDate(date) {
+  return ((Math.max(1980, date.getFullYear()) - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate();
+}
+
+function excelStoredZip(files) {
+  const encoder = new TextEncoder();
+  const now = new Date();
+  const dosTime = excelDosTime(now);
+  const dosDate = excelDosDate(now);
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+
+  files.forEach((file) => {
+    const name = encoder.encode(file.name);
+    const data = file.data instanceof Uint8Array ? file.data : encoder.encode(file.data);
+    const crc = excelCrc32(data);
+    const localHeader = new Uint8Array(30 + name.length);
+    const localView = new DataView(localHeader.buffer);
+    localView.setUint32(0, 0x04034B50, true);
+    localView.setUint16(4, 20, true);
+    localView.setUint16(6, 0x0800, true);
+    localView.setUint16(8, 0, true);
+    localView.setUint16(10, dosTime, true);
+    localView.setUint16(12, dosDate, true);
+    localView.setUint32(14, crc, true);
+    localView.setUint32(18, data.length, true);
+    localView.setUint32(22, data.length, true);
+    localView.setUint16(26, name.length, true);
+    localView.setUint16(28, 0, true);
+    localHeader.set(name, 30);
+    localParts.push(localHeader, data);
+
+    const centralHeader = new Uint8Array(46 + name.length);
+    const centralView = new DataView(centralHeader.buffer);
+    centralView.setUint32(0, 0x02014B50, true);
+    centralView.setUint16(4, 20, true);
+    centralView.setUint16(6, 20, true);
+    centralView.setUint16(8, 0x0800, true);
+    centralView.setUint16(10, 0, true);
+    centralView.setUint16(12, dosTime, true);
+    centralView.setUint16(14, dosDate, true);
+    centralView.setUint32(16, crc, true);
+    centralView.setUint32(20, data.length, true);
+    centralView.setUint32(24, data.length, true);
+    centralView.setUint16(28, name.length, true);
+    centralView.setUint16(30, 0, true);
+    centralView.setUint16(32, 0, true);
+    centralView.setUint16(34, 0, true);
+    centralView.setUint16(36, 0, true);
+    centralView.setUint32(38, 0, true);
+    centralView.setUint32(42, offset, true);
+    centralHeader.set(name, 46);
+    centralParts.push(centralHeader);
+    offset += localHeader.length + data.length;
+  });
+
+  const centralDirectory = excelConcatBytes(centralParts);
+  const endRecord = new Uint8Array(22);
+  const endView = new DataView(endRecord.buffer);
+  endView.setUint32(0, 0x06054B50, true);
+  endView.setUint16(4, 0, true);
+  endView.setUint16(6, 0, true);
+  endView.setUint16(8, files.length, true);
+  endView.setUint16(10, files.length, true);
+  endView.setUint32(12, centralDirectory.length, true);
+  endView.setUint32(16, offset, true);
+  endView.setUint16(20, 0, true);
+  return excelConcatBytes([...localParts, centralDirectory, endRecord]);
+}
+
+function excelContentTypesXml(sheetCount) {
+  const worksheets = Array.from({ length: sheetCount }, (_, index) => {
+    return `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`;
+  }).join("");
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  ${worksheets}
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+</Types>`;
+}
+
+function excelWorkbookXml(sheets) {
+  const sheetXml = sheets.map((sheet, index) => {
+    return `<sheet name="${excelEscape(sheet.name)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`;
+  }).join("");
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <bookViews><workbookView xWindow="0" yWindow="0" windowWidth="24000" windowHeight="12000"/></bookViews>
+  <sheets>${sheetXml}</sheets>
+</workbook>`;
+}
+
+function excelWorkbookRelsXml(sheetCount) {
+  const worksheetRelationships = Array.from({ length: sheetCount }, (_, index) => {
+    return `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`;
+  }).join("");
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  ${worksheetRelationships}
+  <Relationship Id="rId${sheetCount + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`;
+}
+
+function excelWorkbookBytes(sheets) {
+  const createdAt = new Date().toISOString();
+  const files = [
+    { name: "[Content_Types].xml", data: excelContentTypesXml(sheets.length) },
+    {
+      name: "_rels/.rels",
+      data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+</Relationships>`
+    },
+    {
+      name: "docProps/core.xml",
+      data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <dc:creator>PT Barbershop POS</dc:creator>
+  <cp:lastModifiedBy>PT Barbershop POS</cp:lastModifiedBy>
+  <dcterms:created xsi:type="dcterms:W3CDTF">${createdAt}</dcterms:created>
+  <dcterms:modified xsi:type="dcterms:W3CDTF">${createdAt}</dcterms:modified>
+</cp:coreProperties>`
+    },
+    {
+      name: "docProps/app.xml",
+      data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+  <Application>PT Barbershop POS</Application>
+  <Company>PT Barbershop</Company>
+</Properties>`
+    },
+    { name: "xl/workbook.xml", data: excelWorkbookXml(sheets) },
+    { name: "xl/_rels/workbook.xml.rels", data: excelWorkbookRelsXml(sheets.length) },
+    { name: "xl/styles.xml", data: excelStylesXml() },
+    ...sheets.map((sheet, index) => ({ name: `xl/worksheets/sheet${index + 1}.xml`, data: sheet.xml }))
+  ];
+  return excelStoredZip(files);
+}
+
+function excelServiceSummary(bill) {
+  return (bill.items || []).map((item) => {
+    const category = categoryNames[item.category] || "Dịch vụ";
+    return `${category}: ${item.name} (${Number(item.commission || 0)}%)`;
+  }).join(" | ");
+}
+
+function excelCommissionPercent(bill) {
+  const total = Number(bill.total || 0);
+  if (!total) return 0;
+  return Math.round((Number(bill.commission || 0) / total * 100) * 10) / 10;
+}
+
+function excelFileNameSegment(value) {
+  return String(value || "PT-Barbershop")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48) || "PT-Barbershop";
+}
+
+function downloadExcelWorkbook(workbook, fileName) {
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(new Blob([workbook], { type: EXCEL_MIME_TYPE }));
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+function downloadPendingShiftExcel() {
+  if (!isManager()) {
+    alert("Chỉ Admin hoặc Quản Lý mới được tải Excel kết ca.");
+    return;
+  }
+  if (!pendingShiftExcel || pendingShiftExcel.workspaceId !== activeWorkspaceId()) {
+    alert("Chưa có file Excel kết ca mới. Hãy chốt ca trước hoặc xuất báo cáo 30 ngày.");
+    return;
+  }
+  downloadExcelWorkbook(pendingShiftExcel.workbook, pendingShiftExcel.fileName);
+  setExcelExportStatus(`Đã tải lại ${pendingShiftExcel.fileName}.`);
+  showToast("Đã tải Excel kết ca");
+}
+
+function excelReportDaysForBills(bills, fallbackDate) {
+  const days = Array.from(new Set((bills || []).map((bill) => excelDayKey(bill.createdAt)).filter(Boolean))).sort();
+  if (days.length) return days;
+  const fallbackDay = excelDayKey(fallbackDate || new Date());
+  return fallbackDay ? [fallbackDay] : lastThirtyExcelDays();
+}
+
+function exportExcelReport(options = {}) {
+  if (!isManager()) {
+    alert("Chỉ Admin hoặc Quản Lý mới được xuất báo cáo Excel.");
+    return null;
+  }
+  if (typeof TextEncoder === "undefined") {
+    alert("Trình duyệt này chưa hỗ trợ xuất Excel. Hãy cập nhật Safari, Chrome hoặc Edge.");
+    return null;
+  }
+
+  const days = Array.isArray(options.days) && options.days.length
+    ? Array.from(new Set(options.days)).sort()
+    : lastThirtyExcelDays();
+  const startDay = days[0];
+  const endDay = days[days.length - 1];
+  const sourceBills = Array.isArray(options.bills) ? options.bills : state.bills;
+  const reportBills = sourceBills
+    .filter((bill) => {
+      const day = excelDayKey(bill.createdAt);
+      return day >= startDay && day <= endDay;
+    })
+    .slice()
+    .sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt));
+  const billsByDay = new Map();
+  reportBills.forEach((bill) => {
+    const day = excelDayKey(bill.createdAt);
+    const bills = billsByDay.get(day) || [];
+    bills.push(bill);
+    billsByDay.set(day, bills);
+  });
+
+  const dailyRows = days.map((day) => {
+    const dayBills = billsByDay.get(day) || [];
+    const totals = totalsForBills(dayBills);
+    const payments = paymentTotalsForBills(dayBills);
+    return {
+      values: [
+        excelDateLabel(day),
+        totals.billCount,
+        totals.sales,
+        totals.commission,
+        Math.max(0, totals.sales - totals.commission),
+        payments.cash,
+        payments.transfer,
+        payments.card,
+        payments.other,
+        totals.canceledCount,
+        totals.canceledAmount
+      ]
+    };
+  });
+  const reportTotals = totalsForBills(reportBills);
+  const reportPayments = paymentTotalsForBills(reportBills);
+
+  const detailRows = reportBills.map((bill) => ({
+    kind: bill.status === "canceled" ? "canceled" : "paid",
+    values: [
+      excelDateLabel(excelDayKey(bill.createdAt)),
+      excelTimeLabel(bill.createdAt),
+      bill.invoiceNo || "-",
+      bill.queueNo ? `#${bill.queueNo}` : "-",
+      bill.customer || "Khách lẻ",
+      bill.phone || "",
+      bill.staffName || "-",
+      excelServiceSummary(bill),
+      paymentLabel(bill.paymentMethod),
+      Number(bill.total || 0),
+      excelCommissionPercent(bill),
+      bill.status === "canceled" ? 0 : Number(bill.commission || 0),
+      bill.status === "canceled" ? "Đã hủy" : "Đã tính tiền",
+      bill.createdBy || "-",
+      bill.status === "canceled" ? (bill.cancelReason || "Không ghi") : ""
+    ]
+  }));
+
+  const staffDailyMap = new Map();
+  activeBills(reportBills).forEach((bill) => {
+    const day = excelDayKey(bill.createdAt);
+    const staffName = bill.staffName || "Không xác định";
+    const key = `${day}|${staffName}`;
+    const row = staffDailyMap.get(key) || { day, staffName, billCount: 0, sales: 0, commission: 0 };
+    row.billCount += 1;
+    row.sales += Number(bill.total || 0);
+    row.commission += Number(bill.commission || 0);
+    staffDailyMap.set(key, row);
+  });
+  const staffDailyRows = Array.from(staffDailyMap.values())
+    .sort((left, right) => left.day.localeCompare(right.day) || left.staffName.localeCompare(right.staffName, "vi"))
+    .map((row) => ({
+      values: [
+        excelDateLabel(row.day),
+        row.staffName,
+        row.billCount,
+        row.sales,
+        row.commission,
+        row.sales ? Math.round((row.commission / row.sales * 100) * 10) / 10 : 0
+      ]
+    }));
+
+  const staffTotalMap = new Map();
+  Array.from(staffDailyMap.values()).forEach((row) => {
+    const total = staffTotalMap.get(row.staffName) || { staffName: row.staffName, billCount: 0, sales: 0, commission: 0 };
+    total.billCount += row.billCount;
+    total.sales += row.sales;
+    total.commission += row.commission;
+    staffTotalMap.set(row.staffName, total);
+  });
+  const staffTotalRows = Array.from(staffTotalMap.values())
+    .sort((left, right) => right.commission - left.commission)
+    .map((row) => ({
+      values: [
+        row.staffName,
+        row.billCount,
+        row.sales,
+        row.commission,
+        row.sales ? Math.round((row.commission / row.sales * 100) * 10) / 10 : 0
+      ]
+    }));
+
+  const branch = reportBranchName();
+  const reportLabel = options.reportLabel || "BÁO CÁO 30 NGÀY";
+  const totalLabel = options.totalLabel || "30 NGÀY";
+  const title = `PT BARBERSHOP | ${reportLabel}`;
+  const subtitle = `CHI NHÁNH: ${branchBrandName(branch)}`;
+  const info = `Khoảng thời gian: ${excelDateLabel(startDay)} - ${excelDateLabel(endDay)} | Xuất lúc: ${timeText(new Date().toISOString())} | Người xuất: ID ${state.session.id} (${reportRoleLabel()})`;
+  const sheets = [
+    {
+      name: options.summarySheetName || "Tổng hợp 30 ngày",
+      xml: excelSheetXml({
+        title,
+        subtitle,
+        info,
+        headers: ["Ngày", "Bill hợp lệ", "Doanh thu", "Chia thợ", "Tiệm còn lại", "Tiền mặt", "Chuyển khoản", "Thẻ", "Khác", "Đơn hủy", "Giá trị hủy"],
+        rows: dailyRows,
+        totalRow: {
+          values: [`TỔNG ${totalLabel}`, reportTotals.billCount, reportTotals.sales, reportTotals.commission, Math.max(0, reportTotals.sales - reportTotals.commission), reportPayments.cash, reportPayments.transfer, reportPayments.card, reportPayments.other, reportTotals.canceledCount, reportTotals.canceledAmount]
+        },
+        widths: [14, 13, 17, 17, 17, 16, 17, 15, 15, 12, 17],
+        currencyColumns: [2, 3, 4, 5, 6, 7, 8, 10],
+        numberColumns: [1, 9],
+        percentageColumns: []
+      })
+    },
+    {
+      name: "Chi tiết bill",
+      xml: excelSheetXml({
+        title,
+        subtitle,
+        info,
+        headers: ["Ngày", "Giờ", "Số HĐ", "STT", "Khách", "SĐT", "Thợ cắt/làm", "Dịch vụ", "Thanh toán", "Doanh thu", "% chia TB", "Chia thợ", "Trạng thái", "Thu ngân", "Lý do hủy"],
+        rows: detailRows,
+        totalRow: {
+          values: ["TỔNG", "", "", "", "", "", "", "", "", reportTotals.sales, "", reportTotals.commission, `${reportTotals.billCount} hợp lệ / ${reportTotals.canceledCount} hủy`, "", ""]
+        },
+        widths: [13, 10, 14, 9, 20, 15, 20, 45, 16, 17, 12, 17, 16, 18, 30],
+        currencyColumns: [9, 11],
+        numberColumns: [],
+        percentageColumns: [10]
+      })
+    },
+    {
+      name: "Chia thợ theo ngày",
+      xml: excelSheetXml({
+        title,
+        subtitle,
+        info,
+        headers: ["Ngày", "Nhân viên", "Bill hợp lệ", "Doanh thu", "Tiền chia", "% chia TB"],
+        rows: staffDailyRows,
+        totalRow: {
+          values: [`TỔNG ${totalLabel}`, "", reportTotals.billCount, reportTotals.sales, reportTotals.commission, ""]
+        },
+        widths: [14, 24, 13, 18, 18, 13],
+        currencyColumns: [3, 4],
+        numberColumns: [2],
+        percentageColumns: [5]
+      })
+    },
+    {
+      name: "Tổng chia từng thợ",
+      xml: excelSheetXml({
+        title,
+        subtitle,
+        info,
+        headers: ["Nhân viên", "Bill hợp lệ", "Doanh thu", "Tổng tiền chia", "% chia TB"],
+        rows: staffTotalRows,
+        totalRow: {
+          values: [`TỔNG ${totalLabel}`, reportTotals.billCount, reportTotals.sales, reportTotals.commission, ""]
+        },
+        widths: [28, 13, 18, 20, 13],
+        currencyColumns: [2, 3],
+        numberColumns: [1],
+        percentageColumns: [4]
+      })
+    }
+  ];
+
+  const workbook = excelWorkbookBytes(sheets);
+  const fileTag = options.fileTag || "bao-cao-30-ngay";
+  const fileName = `PT-Barbershop-${excelFileNameSegment(branch)}-${fileTag}-${excelDayKey(new Date()).replaceAll("-", "")}.xlsx`;
+  const result = { fileName, workbook, reportTotals, workspaceId: activeWorkspaceId() };
+  if (options.keepForManual) {
+    pendingShiftExcel = result;
+    renderExcelReportInfo();
+  } else {
+    downloadExcelWorkbook(workbook, fileName);
+  }
+  setExcelExportStatus(options.keepForManual
+    ? `Đã tạo ${fileName}. Bấm Tải Excel kết ca để lưu file vào máy.`
+    : `Đã tải ${fileName}. Báo cáo gồm ${reportTotals.billCount} bill hợp lệ và doanh thu chi tiết.`);
+  showToast(options.toastMessage || "Đã xuất báo cáo Excel 30 ngày");
+  return result;
 }
 
 function importBackupFile(file) {
@@ -886,8 +1539,12 @@ function commissionByStaff(bills) {
   return Array.from(rows.entries());
 }
 
+function pendingCancelRequestForBill(billId) {
+  return state.cancelRequests.find((request) => request.billId === billId && request.status === "pending");
+}
+
 function canCancelBill(bill) {
-  return bill.status !== "canceled" && state.shift.isOpen && bill.shiftId === state.shift.id;
+  return bill.status !== "canceled" && state.shift.isOpen && bill.shiftId === state.shift.id && !pendingCancelRequestForBill(bill.id);
 }
 
 function billSearchTerm() {
@@ -1261,6 +1918,9 @@ function renderBillHistory() {
 
   body.innerHTML = bills.map((bill) => {
     const canceled = bill.status === "canceled";
+    const pendingCancel = pendingCancelRequestForBill(bill.id);
+    const statusClass = canceled ? "canceled" : pendingCancel ? "pending" : "paid";
+    const statusText = canceled ? "Đã hủy" : pendingCancel ? "Chờ QL duyệt" : "Đã tính tiền";
     const services = bill.items.map((item) => escapeHtml(item.name)).join(", ");
     const cancelNote = cancelDetailsHtml(bill);
     const commissionCell = isManager() ? `<td>${canceled ? "0 VND" : money(bill.commission)}</td>` : "";
@@ -1270,7 +1930,7 @@ function renderBillHistory() {
         ${bill.note ? `<span>Ghi chú: ${escapeHtml(bill.note)}</span>` : ""}
       </div>
     ` : "";
-    const cancelButtonText = isManager() ? "Hủy đơn" : "Hủy cần QL";
+    const cancelButtonText = isManager() ? "Hủy đơn" : "Yêu cầu hủy";
     const actions = `
       <button class="small-button" data-print-bill="${bill.id}">In lại</button>
       ${canCancelBill(bill) ? `<button class="small-button danger-button" data-cancel-bill="${bill.id}">${cancelButtonText}</button>` : ""}
@@ -1283,7 +1943,7 @@ function renderBillHistory() {
         <td>${escapeHtml(bill.customer)}${customerMeta}${cancelNote}</td>
         <td>${escapeHtml(bill.staffName)}</td>
         <td>${services}</td>
-        <td><span class="status ${canceled ? "canceled" : "paid"}">${canceled ? "Đã hủy" : "Đã tính tiền"}</span></td>
+        <td><span class="status ${statusClass}">${statusText}</span></td>
         <td>${paymentLabel(bill.paymentMethod)}</td>
         <td><strong>${money(bill.total)}</strong></td>
         ${commissionCell}
@@ -1294,8 +1954,11 @@ function renderBillHistory() {
 
   cards.innerHTML = bills.map((bill) => {
     const canceled = bill.status === "canceled";
+    const pendingCancel = pendingCancelRequestForBill(bill.id);
+    const statusClass = canceled ? "canceled" : pendingCancel ? "pending" : "paid";
+    const statusText = canceled ? "Đã hủy" : pendingCancel ? "Chờ QL duyệt" : "Đã tính tiền";
     const services = bill.items.map((item) => escapeHtml(item.name)).join(", ");
-    const cancelButtonText = isManager() ? "Hủy đơn" : "Hủy cần QL";
+    const cancelButtonText = isManager() ? "Hủy đơn" : "Yêu cầu hủy";
     const actions = `
       <button class="small-button" data-print-bill="${bill.id}">In lại</button>
       ${canCancelBill(bill) ? `<button class="small-button danger-button" data-cancel-bill="${bill.id}">${cancelButtonText}</button>` : ""}
@@ -1314,7 +1977,7 @@ function renderBillHistory() {
               ${bill.phone ? `<span>SĐT: ${escapeHtml(bill.phone)}</span>` : ""}
             </div>
           </div>
-          <span class="status ${canceled ? "canceled" : "paid"}">${canceled ? "Đã hủy" : "Đã tính tiền"}</span>
+          <span class="status ${statusClass}">${statusText}</span>
         </div>
         <div>${services}</div>
         ${cancelDetailsHtml(bill)}
@@ -1332,6 +1995,46 @@ function renderBillHistory() {
       </article>
     `;
   }).join("");
+}
+
+function renderCancelApprovalRequests() {
+  const panel = $("#cancelApprovalPanel");
+  const container = $("#cancelApprovalList");
+  const count = $("#cancelApprovalCount");
+  if (!panel || !container || !count) return;
+
+  if (!isManager()) {
+    panel.classList.add("is-hidden");
+    return;
+  }
+
+  const requests = state.cancelRequests
+    .filter((request) => request.status === "pending")
+    .map((request) => ({ request, bill: state.bills.find((bill) => bill.id === request.billId) }))
+    .filter(({ bill }) => bill && bill.status !== "canceled")
+    .sort((left, right) => new Date(left.request.requestedAt) - new Date(right.request.requestedAt));
+
+  count.textContent = `${requests.length} yêu cầu chờ duyệt`;
+  if (!requests.length) {
+    panel.classList.add("is-hidden");
+    return;
+  }
+
+  panel.classList.remove("is-hidden");
+  container.innerHTML = requests.map(({ request, bill }) => `
+    <div class="summary-row">
+      <span>
+        <strong>${escapeHtml(bill.invoiceNo || request.invoiceNo || "-")} · ${escapeHtml(bill.customer || "Khách lẻ")}</strong>
+        <span class="row-meta">Thợ: ${escapeHtml(bill.staffName || "-")} · ${money(bill.total)}</span>
+        <span class="row-meta">Gửi bởi: ${escapeHtml(request.requestedBy || "Thu Ngân")} · ${timeText(request.requestedAt)}</span>
+        <span class="row-meta">Lý do: ${escapeHtml(request.reason || "Không ghi")}</span>
+      </span>
+      <span class="row-actions">
+        <button class="small-button" data-reject-cancel-request="${request.id}">Từ chối</button>
+        <button class="small-button danger-button" data-approve-cancel-request="${request.id}">Duyệt hủy</button>
+      </span>
+    </div>
+  `).join("");
 }
 
 function renderShift() {
@@ -1447,10 +2150,12 @@ function renderAll() {
   renderStaffList();
   renderAccountGroups();
   renderBillHistory();
+  renderCancelApprovalRequests();
   renderShift();
   renderShiftLogs();
   renderSecurityLog();
   renderBackupInfo();
+  renderExcelReportInfo();
 }
 
 function resetOrder() {
@@ -1531,6 +2236,55 @@ function saveBill(options = {}) {
   return bill;
 }
 
+function finalizeBillCancellation(bill, reason, request = null) {
+  const now = new Date().toISOString();
+  bill.status = "canceled";
+  bill.canceledAt = now;
+  bill.canceledBy = state.session.name;
+  bill.cancelReason = reason;
+  bill.approvedBy = state.session.name;
+  bill.approvedAt = now;
+  if (request) {
+    request.status = "approved";
+    request.resolvedAt = now;
+    request.resolvedById = state.session.id;
+    request.resolvedBy = state.session.name;
+  }
+  logSecurity(
+    request ? "Duyệt hủy bill" : "Hủy bill",
+    `${request ? `Yêu cầu từ ${request.requestedBy || "Thu Ngân"}. ` : ""}Lý do: ${reason}.`,
+    bill
+  );
+}
+
+function submitCancelRequest(bill, reason) {
+  if (pendingCancelRequestForBill(bill.id)) {
+    showToast("Bill này đang chờ Quản Lí duyệt.", "danger");
+    return;
+  }
+  const request = {
+    id: crypto.randomUUID(),
+    billId: bill.id,
+    invoiceNo: bill.invoiceNo || "",
+    reason,
+    requestedAt: new Date().toISOString(),
+    requestedById: state.session.id,
+    requestedBy: state.session.name,
+    status: "pending",
+    resolvedAt: "",
+    resolvedById: "",
+    resolvedBy: "",
+    resolutionNote: ""
+  };
+  state.cancelRequests.push(request);
+  logSecurity("Gửi yêu cầu hủy bill", `Lý do: ${reason}. Chờ Quản Lí duyệt.`, bill);
+  saveState();
+  renderAll();
+  showToast(syncOnline
+    ? `Đã gửi yêu cầu hủy ${bill.invoiceNo}. Chờ Quản Lí duyệt.`
+    : `Đã tạo yêu cầu hủy ${bill.invoiceNo}. Cần đồng bộ online để Quản Lí ở máy khác duyệt.`);
+}
+
 function cancelBill(billId) {
   const bill = state.bills.find((item) => item.id === billId);
   if (!bill || !canCancelBill(bill)) return;
@@ -1541,19 +2295,52 @@ function cancelBill(billId) {
     alert("Phải nhập lý do hủy đơn.");
     return;
   }
-  const approval = requestManagerApproval(`hủy hóa đơn ${bill.invoiceNo || ""}`);
-  if (!approval) return;
 
-  bill.status = "canceled";
-  bill.canceledAt = new Date().toISOString();
-  bill.canceledBy = state.session.name;
-  bill.cancelReason = cleanReason;
-  bill.approvedBy = approval.name;
-  bill.approvedAt = new Date().toISOString();
-  logSecurity("Hủy bill", `Lý do: ${cleanReason}. Quản Lý duyệt: ${approval.name}`, bill);
+  if (!isManager()) {
+    submitCancelRequest(bill, cleanReason);
+    return;
+  }
+
+  finalizeBillCancellation(bill, cleanReason);
   saveState();
   renderAll();
   showToast(`Đã hủy ${bill.invoiceNo}`);
+}
+
+function approveCancelRequest(requestId) {
+  if (!isManager()) return;
+  const request = state.cancelRequests.find((item) => item.id === requestId && item.status === "pending");
+  const bill = request ? state.bills.find((item) => item.id === request.billId) : null;
+  if (!request || !bill || bill.status === "canceled") {
+    showToast("Yêu cầu hủy không còn hợp lệ.", "danger");
+    return;
+  }
+  if (!state.shift.isOpen || bill.shiftId !== state.shift.id) {
+    showToast("Ca của bill này đã chốt, không thể duyệt hủy trực tiếp.", "danger");
+    return;
+  }
+  finalizeBillCancellation(bill, request.reason || "Không ghi", request);
+  saveState();
+  renderAll();
+  showToast(`Đã duyệt hủy ${bill.invoiceNo}`);
+}
+
+function rejectCancelRequest(requestId) {
+  if (!isManager()) return;
+  const request = state.cancelRequests.find((item) => item.id === requestId && item.status === "pending");
+  if (!request) return;
+  const note = prompt("Ghi chú từ chối (có thể để trống):");
+  if (note === null) return;
+  const bill = state.bills.find((item) => item.id === request.billId);
+  request.status = "rejected";
+  request.resolvedAt = new Date().toISOString();
+  request.resolvedById = state.session.id;
+  request.resolvedBy = state.session.name;
+  request.resolutionNote = note.trim();
+  logSecurity("Từ chối hủy bill", note.trim() || "Không ghi chú", bill || null);
+  saveState();
+  renderAll();
+  showToast(`Đã từ chối yêu cầu hủy ${request.invoiceNo || "bill"}`);
 }
 
 function printPaymentBill() {
@@ -1700,7 +2487,19 @@ function closeShift(options = {}) {
   state.selectedServiceIds = [];
   saveState();
   renderAll();
-  showToast("Đã kết ca. Doanh thu ca hiện tại đã về 0.");
+  const shiftExcel = isManager() ? exportExcelReport({
+    bills,
+    days: excelReportDaysForBills(bills, report.closedAt),
+    reportLabel: "BÁO CÁO KẾT CA",
+    totalLabel: "KẾT CA",
+    summarySheetName: "Tổng hợp kết ca",
+    fileTag: "bao-cao-ket-ca",
+    keepForManual: true,
+    toastMessage: "Đã tạo Excel chi tiết kết ca"
+  }) : null;
+  showToast(shiftExcel
+    ? "Đã kết ca. Doanh thu ca mới về 0, Excel chi tiết đã sẵn sàng để tải."
+    : "Đã kết ca. Doanh thu ca hiện tại đã về 0.");
   if (options.print) {
     printShiftReport(report);
   }
@@ -1799,6 +2598,7 @@ $("#loginForm").addEventListener("submit", async (event) => {
 
   if (user) {
     const session = publicUser(user);
+    pendingShiftExcel = null;
     state = loadState(session.workspaceId);
     state.session = session;
     state.loggedIn = true;
@@ -1818,6 +2618,7 @@ $("#loginForm").addEventListener("submit", async (event) => {
 $("#logoutBtn").addEventListener("click", () => {
   clearInterval(window.__ptSyncInterval);
   cloudStarted = false;
+  pendingShiftExcel = null;
   state.session = null;
   state.loggedIn = false;
   saveSession(null);
@@ -1984,6 +2785,13 @@ $("#billCards").addEventListener("click", (event) => {
   if (cancelId) cancelBill(cancelId);
 });
 
+$("#cancelApprovalList").addEventListener("click", (event) => {
+  const approveId = event.target.dataset.approveCancelRequest;
+  const rejectId = event.target.dataset.rejectCancelRequest;
+  if (approveId) approveCancelRequest(approveId);
+  if (rejectId) rejectCancelRequest(rejectId);
+});
+
 $("#openShiftForm").addEventListener("submit", (event) => {
   event.preventDefault();
   openShift();
@@ -2013,6 +2821,8 @@ $("#backupFileInput").addEventListener("change", (event) => {
   importBackupFile(event.target.files[0]);
   event.target.value = "";
 });
+$("#exportExcelBtn").addEventListener("click", exportExcelReport);
+$("#downloadShiftExcelBtn").addEventListener("click", downloadPendingShiftExcel);
 
 $("#accountGroupForm").addEventListener("submit", createAccountGroup);
 $("#accountAutoFillBtn").addEventListener("click", generateAccountCredentials);

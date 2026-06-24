@@ -39,11 +39,12 @@ HUONG DAN SU DUNG PT BARBERSHOP POS
 
 7. Quyen tai khoan
 - Quan Li xem duoc tat ca bill, don da huy, bang gia, % chia, nhan vien, lich su ket ca va sao luu du lieu.
-- Thu Ngan chi order, in bill, tinh tien, huy don va ket ca.
+- Thu Ngan chi order, in bill, tinh tien, gui yeu cau huy don va ket ca.
 - Don bi huy khong bi xoa khoi he thong, ma hien trang thai Da huy de Quan Li xem lai.
-- Khi huy don da luu, nguoi huy bat buoc nhap ly do va phai co ma Quan Li duyet.
+- Thu Ngan chi nhap ly do huy bill, sau do he thong gui yeu cau den tai khoan Quan Li/Admin de duyet hoac tu choi.
 - Thu Ngan khong xem duoc ly do/chi tiet huy don. Chi Quan Li moi xem duoc chi tiet huy don.
-- Neu dung ban Render co database, server se chan Thu Ngan neu co tinh xoa bill, sua bill da luu, sua bang gia/nhan vien hoac huy bill khong co ma Quan Li.
+- Khi dung Render + Postgres va co Internet, yeu cau huy se tu dong hien tren may/iPhone dang dang nhap Quan Li/Admin trong vai giay. Khong can dua mat khau Quan Li cho Thu Ngan.
+- Neu dung ban Render co database, server se chan Thu Ngan neu co tinh xoa bill, sua bill da luu, sua bang gia/nhan vien hoac huy bill truc tiep.
 - Quan Li vao Dau ca / Ket ca de xem Nhat ky chong da bill.
 
 8. Admin quan ly tai khoan
@@ -90,11 +91,21 @@ HUONG DAN SU DUNG PT BARBERSHOP POS
 - Bill da luu duoc khoa: khong co nut sua bill, khong co xoa bill.
 - Nut In bill se luu hoa don vao he thong truoc roi moi in, khong con in hoa don nhap.
 - Sau khi da in/luu, bam Xoa dich vu chi xoa bill dang soan moi, khong xoa duoc hoa don da luu.
-- Thu Ngan muon huy bill phai nhap ly do va can ID/mat khau Quan Li duyet.
+
+14. Bao cao Excel
+- Chi Admin va Quan Li duoc xuat Excel.
+- Vao tab Dau ca / Ket ca, bam Xuat Excel 30 ngay.
+- File Excel co ten thuong hieu PT Barbershop va ten chi nhanh dang dang nhap.
+- File gom 4 tab: Tong hop 30 ngay, Chi tiet bill, Chia tho theo ngay, Tong chia tung tho.
+- Chi tiet bill co so HD, khach, tho cat/lam, dich vu, thanh toan, doanh thu, % chia, tien chia va trang thai huy.
+- Khi Admin/Quan Li bam Ket ca, doanh thu ca moi tro ve 0 va Excel chi tiet cua ca vua chot duoc tao san.
+- Sau Ket ca, bam Tai Excel ket ca de luu file vao may. Trinh duyet dien thoai/may tinh co the chan tai tu dong, nen nut nay dam bao file duoc tai chac chan.
+- Bill da luu va nhat ky van duoc khoa tren he thong de chong da bill; khong bi xoa am tham sau Ket ca.
+- Thu Ngan muon huy bill chi nhap ly do; Quan Li/Admin tu duyet bang tai khoan dang nhap cua minh, khong can dua ID/mat khau cho Thu Ngan.
 - He thong ghi Nhat ky bao mat khi luu bill, huy bill, mo ca, ket ca, khoi phuc du lieu.
 - Quan Li xem duoc ai thao tac, luc nao, voi hoa don nao.
 - Khoa manh nhat la chay ban Render Web Service + Postgres, vi server se tu choi luu du lieu neu Thu Ngan co tinh lam mat bill.
 
-14. Gui cho nguoi khac
+15. Gui cho nguoi khac
 - Chi gui file ZIP khi ban da kiem tra xong.
 - Nguoi nhan giai nen ZIP truoc, sau do mo index.html.

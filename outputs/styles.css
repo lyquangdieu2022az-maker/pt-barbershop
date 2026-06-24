@@ -626,6 +626,11 @@ select:focus {
   color: var(--ok);
 }
 
+.status.pending {
+  background: var(--gold-soft);
+  color: var(--blue-dark);
+}
+
 .status.canceled {
   background: var(--danger-soft);
   color: var(--danger);
@@ -708,6 +713,29 @@ th {
 .backup-panel {
   display: grid;
   gap: 14px;
+}
+
+.excel-report-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.excel-report-actions .primary-button {
+  min-width: 218px;
+}
+
+.excel-report-actions .ghost-button {
+  white-space: nowrap;
+}
+
+.report-scope {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .backup-actions {
@@ -919,9 +947,18 @@ th {
   .catalog-row,
   .staff-row,
   .summary-row,
+  .excel-report-actions,
   .backup-actions,
   .bill-actions {
     align-items: start;
     grid-template-columns: 1fr;
+  }
+
+  .excel-report-actions {
+    display: grid;
+  }
+
+  .excel-report-actions .primary-button {
+    width: 100%;
   }
 }
