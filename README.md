@@ -79,6 +79,7 @@ Neu dau trang hien `Dong bo: Luu tren may nay`, backend/database chua ket noi ne
 - Co the nhap so dien thoai khach va phuong thuc thanh toan khi tao bill.
 - Lich su bill co o tim So HD, STT, ten khach, so dien thoai, nhan vien hoac phuong thuc thanh toan.
 - Thu Ngan huy bill chi can nhap ly do. He thong gui yeu cau den Quan Li/Admin de duyet hoac tu choi tren tai khoan dang nhap cua ho.
+- Nut yeu cau huy dung form ngay trong app, hoat dong on dinh tren iPhone/Android va khong bao gio hoi ID/mat khau Quan Li.
 - Thu Ngan khong xem duoc chi tiet huy bill; chi Quan Li moi xem duoc.
 - Khi dung Render + Postgres va co Internet, yeu cau huy se tu dong hien tren thiet bi dang dang nhap Quan Li/Admin. Thu Ngan khong can biet hoac nhap mat khau Quan Li.
 
@@ -108,6 +109,7 @@ Neu dau trang hien `Dong bo: Luu tren may nay`, backend/database chua ket noi ne
 
 ## Ket ca
 
+- Sau Ket ca, man hinh bill cua ca dang lam tro ve trong de bat dau ca moi gon gang. Du lieu bill/ket ca cu van nam trong Excel, database va file sao luu da khoa.
 - Nut `Ket ca` se chot ca va dua doanh thu ca hien tai ve 0.
 - Nut `In ket ca` se chot ca, in phieu ket ca, roi dua doanh thu ca hien tai ve 0.
 - Neu da chot ca truoc do, `In ket ca` se in lai ca vua ket gan nhat.
@@ -121,3 +123,10 @@ Neu dau trang hien `Dong bo: Luu tren may nay`, backend/database chua ket noi ne
 - Chi tiet bill co so HD, khach, tho cat/lam, dich vu, thanh toan, doanh thu, % chia, tien chia va trang thai huy.
 - Khi Admin/Quan Li bam `Ket ca`, doanh thu ca moi ve 0 va Excel chi tiet cua ca vua chot duoc tao san. Bam `Tai Excel ket ca` de luu file vao may.
 - Bill va nhat ky bao mat van duoc khoa tren he thong sau Ket ca de giu chong da bill.
+
+## Bao mat ban Render
+
+- Password trong Postgres duoc bam scrypt; API khong tra password ve trinh duyet va man hinh Tai khoan khong hien password.
+- Dang nhap online dung phien HttpOnly ky so; dong bo bill khong gui lai mat khau.
+- Co gioi han dang nhap sai, Content Security Policy, cac security header trinh duyet va kiem soat quyen tren server.
+- Ban mo truc tiep/offline van huu ich de du phong, nhung khong the an toan bang Render Web Service + Postgres vi khong co server de xac thuc va chong sua du lieu.

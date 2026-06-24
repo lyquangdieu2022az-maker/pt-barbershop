@@ -290,13 +290,13 @@
                     <input id="accountManagerId" inputmode="numeric" placeholder="VD: 993901">
                   </label>
                   <label>M&#7853;t kh&#7849;u Qu&#7843;n L&#237;
-                    <input id="accountManagerPassword" placeholder="VD: 040426">
+                    <input id="accountManagerPassword" type="password" autocomplete="new-password" placeholder="Tối thiểu 6 ký tự">
                   </label>
                   <label>ID Thu Ng&#226;n
                     <input id="accountCashierId" inputmode="numeric" placeholder="VD: 312201">
                   </label>
                   <label>M&#7853;t kh&#7849;u Thu Ng&#226;n
-                    <input id="accountCashierPassword" placeholder="VD: 152004">
+                    <input id="accountCashierPassword" type="password" autocomplete="new-password" placeholder="Tối thiểu 6 ký tự">
                   </label>
                 </div>
                 <button id="accountAutoFillBtn" type="button" class="ghost-button">T&#7841;o ID t&#7921; &#273;&#7897;ng cho chi nh&#225;nh m&#7899;i</button>
@@ -357,7 +357,7 @@
             <div class="panel-head">
               <div>
                 <p class="eyebrow">Quản lý ca</p>
-                <h3>Lịch sử kết ca</h3>
+                <h3>Nhật ký ca hiện tại</h3>
               </div>
             </div>
             <div class="table-wrap">
@@ -438,6 +438,29 @@
       </section>
     </main>
 
+    <div id="cancelBillDialog" class="modal-backdrop is-hidden" aria-hidden="true">
+      <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="cancelBillDialogTitle">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">Kiểm soát bill</p>
+            <h2 id="cancelBillDialogTitle">Yêu cầu hủy bill</h2>
+          </div>
+          <button id="cancelBillDialogClose" class="icon-button" type="button" aria-label="Đóng">×</button>
+        </div>
+        <p id="cancelBillDialogInfo" class="modal-copy"></p>
+        <form id="cancelBillForm" class="stack-form">
+          <input id="cancelBillId" type="hidden">
+          <label>Lý do hủy
+            <textarea id="cancelBillReason" rows="4" maxlength="240" placeholder="Ví dụ: khách đổi dịch vụ, nhập nhầm bill..." required></textarea>
+          </label>
+          <p id="cancelBillError" class="form-error" role="alert"></p>
+          <div class="modal-actions">
+            <button id="cancelBillDialogCancel" class="ghost-button" type="button">Quay lại</button>
+            <button id="cancelBillDialogSubmit" class="primary-button danger-button" type="submit">Gửi yêu cầu hủy</button>
+          </div>
+        </form>
+      </section>
+    </div>
     <div id="toast" class="toast is-hidden" role="status" aria-live="polite"></div>
     <section id="printArea" class="print-area" aria-hidden="true"></section>
 

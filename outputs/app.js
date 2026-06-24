@@ -83,16 +83,10 @@ const defaultState = {
 };
 
 let accountState = loadAccountState();
-let savedSession = loadSavedSession();
-let state = loadState(savedSession?.workspaceId || DEFAULT_WORKSPACE_ID);
-if (savedSession && findLocalUser(savedSession.id, savedSession.password)) {
-  state.session = publicUser(findLocalUser(savedSession.id, savedSession.password));
-  state.loggedIn = true;
-  state.workspaceId = state.session.workspaceId;
-} else {
-  savedSession = null;
-  saveSession(null);
-}
+saveSession(null);
+let state = loadState(DEFAULT_WORKSPACE_ID);
+state.session = null;
+state.loggedIn = false;
 let cloudStarted = false;
 let cloudBooting = false;
 let cloudSaveTimer = null;
@@ -243,14 +237,6 @@ function saveAccountState() {
   localStorage.setItem(ACCOUNT_STORE_KEY, JSON.stringify(accountState));
 }
 
-function loadSavedSession() {
-  try {
-    return JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
-  } catch {
-    return null;
-  }
-}
-
 function saveSession(session) {
   if (session) {
     localStorage.setItem(SESSION_KEY, JSON.stringify(session));
@@ -270,7 +256,6 @@ function activeWorkspaceId() {
 function publicUser(user) {
   return user ? {
     id: user.id,
-    password: user.password,
     role: user.role,
     name: user.name,
     workspaceId: user.workspaceId || DEFAULT_WORKSPACE_ID,
@@ -287,8 +272,13 @@ function mergeAccountGroup(group, users = []) {
   accountState.groups = accountState.groups.filter((item) => item.workspaceId !== group.workspaceId);
   accountState.groups.push(group);
   users.forEach((user) => {
+    const existing = accountState.users.find((item) => item.id === user.id);
     accountState.users = accountState.users.filter((item) => item.id !== user.id);
-    accountState.users.push(user);
+    accountState.users.push({
+      ...existing,
+      ...user,
+      password: user.password || existing?.password || ""
+    });
   });
   saveAccountState();
 }
@@ -333,6 +323,7 @@ function normalizeState(nextState) {
     userId: entry.userId || "",
     userName: entry.userName || "Hệ thống",
     role: entry.role || "",
+    shiftId: entry.shiftId || "",
     action: entry.action || "Thao tác",
     invoiceNo: entry.invoiceNo || "",
     detail: entry.detail || ""
@@ -481,13 +472,7 @@ function applyBusinessState(data) {
 }
 
 function syncHeaders() {
-  const user = accountState.users.find((item) => item.id === state.session?.id);
-  const headers = { "Content-Type": "application/json" };
-  if (state.session) {
-    headers["X-PT-User"] = state.session.id;
-    headers["X-PT-Password"] = state.session.password || user?.password || "";
-  }
-  return headers;
+  return { "Content-Type": "application/json" };
 }
 
 function setSyncStatus(text, online = false) {
@@ -513,6 +498,7 @@ function logSecurity(action, detail = "", bill = null) {
     userId: state.session?.id || "",
     userName: state.session?.name || "Hệ thống",
     role: state.session?.role || "",
+    shiftId: state.shift?.id || "",
     action,
     invoiceNo: bill?.invoiceNo || "",
     detail
@@ -521,7 +507,7 @@ function logSecurity(action, detail = "", bill = null) {
 }
 
 async function fetchCloudState() {
-  const response = await fetch(apiUrl("/api/state"), { headers: syncHeaders(), cache: "no-store" });
+  const response = await fetch(apiUrl("/api/state"), { headers: syncHeaders(), credentials: "include", cache: "no-store" });
   if (!response.ok) throw new Error("Sync fetch failed");
   return response.json();
 }
@@ -530,6 +516,7 @@ async function cloudLogin(id, password) {
   const response = await fetch(apiUrl("/api/login"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify({ id, password })
   });
   if (!response.ok) return null;
@@ -541,11 +528,45 @@ async function cloudLogin(id, password) {
   return null;
 }
 
+async function restoreCloudSession() {
+  try {
+    const response = await fetch(apiUrl("/api/session"), {
+      headers: syncHeaders(),
+      credentials: "include",
+      cache: "no-store"
+    });
+    if (!response.ok) return;
+    const payload = await response.json();
+    if (!payload.user) return;
+    const session = publicUser(payload.user);
+    mergeAccountGroup({
+      workspaceId: session.workspaceId,
+      workspaceName: session.workspaceName,
+      managerId: ["admin", "manager"].includes(session.role) ? session.id : "",
+      cashierId: session.role === "cashier" ? session.id : "",
+      createdAt: ""
+    }, [payload.user]);
+    pendingShiftExcel = null;
+    state = loadState(session.workspaceId);
+    state.session = session;
+    state.loggedIn = true;
+    state.workspaceId = session.workspaceId;
+    saveState();
+    renderAll();
+    setActiveTab("order");
+    startCloudSync();
+    syncAccountGroups();
+  } catch {
+    // Offline mode requires a fresh local login.
+  }
+}
+
 async function syncAccountGroups() {
   if (!isAdmin()) return;
   try {
     const response = await fetch(apiUrl("/api/account-groups"), {
       headers: syncHeaders(),
+      credentials: "include",
       cache: "no-store"
     });
     if (!response.ok) return;
@@ -561,6 +582,7 @@ async function createCloudAccountGroup(payload) {
   const response = await fetch(apiUrl("/api/account-groups"), {
     method: "POST",
     headers: syncHeaders(),
+    credentials: "include",
     body: JSON.stringify(payload)
   });
   if (!response.ok) {
@@ -576,6 +598,7 @@ async function updateCloudAccountGroup(workspaceId, payload) {
   const response = await fetch(apiUrl(`/api/account-groups/${encodeURIComponent(workspaceId)}`), {
     method: "PUT",
     headers: syncHeaders(),
+    credentials: "include",
     body: JSON.stringify(payload)
   });
   if (!response.ok) {
@@ -590,7 +613,8 @@ async function updateCloudAccountGroup(workspaceId, payload) {
 async function deleteCloudAccountGroup(workspaceId) {
   const response = await fetch(apiUrl(`/api/account-groups/${encodeURIComponent(workspaceId)}`), {
     method: "DELETE",
-    headers: syncHeaders()
+    headers: syncHeaders(),
+    credentials: "include"
   });
   if (!response.ok) {
     const errorPayload = await response.json().catch(() => ({}));
@@ -605,6 +629,7 @@ async function pushCloudState() {
   const response = await fetch(apiUrl("/api/state"), {
     method: "POST",
     headers: syncHeaders(),
+    credentials: "include",
     body: JSON.stringify({ data: businessState() })
   });
   if (!response.ok) {
@@ -831,6 +856,17 @@ function excelNormalizeRow(values, columnCount) {
   return Array.from({ length: columnCount }, (_, index) => values[index] ?? "");
 }
 
+function excelRowHeight(values, widths, baseHeight = 24) {
+  const lineCount = values.reduce((highest, value, index) => {
+    const width = Math.max(9, Number(widths[index] || 14));
+    const lines = String(value ?? "")
+      .split(/\r?\n/)
+      .reduce((total, line) => total + Math.max(1, Math.ceil(line.length / Math.max(8, width * 1.15))), 0);
+    return Math.max(highest, lines);
+  }, 1);
+  return Math.min(120, Math.max(baseHeight, 12 + lineCount * 14));
+}
+
 function excelCellStyle(columnIndex, row, options) {
   const isCanceled = row?.kind === "canceled";
   if (options.currencyColumns.includes(columnIndex)) return isCanceled ? 12 : 6;
@@ -869,7 +905,7 @@ function excelSheetXml(options) {
         value,
         excelCellStyle(columnIndex, row, options)
       )),
-      { height: 23 }
+      { height: excelRowHeight(values, options.widths) }
     ));
   });
 
@@ -942,15 +978,15 @@ function excelStylesXml() {
     <xf numFmtId="0" fontId="3" fillId="5" borderId="0" applyAlignment="1"><alignment vertical="center"/></xf>
     <xf numFmtId="0" fontId="1" fillId="4" borderId="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
     <xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
-    <xf numFmtId="164" fontId="0" fillId="0" borderId="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="top"/></xf>
-    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyAlignment="1"><alignment horizontal="right" vertical="top"/></xf>
+    <xf numFmtId="164" fontId="0" fillId="0" borderId="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="top" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyAlignment="1"><alignment horizontal="right" vertical="top" wrapText="1"/></xf>
     <xf numFmtId="0" fontId="1" fillId="2" borderId="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
-    <xf numFmtId="164" fontId="1" fillId="2" borderId="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+    <xf numFmtId="164" fontId="1" fillId="2" borderId="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="center" wrapText="1"/></xf>
     <xf numFmtId="0" fontId="0" fillId="7" borderId="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
-    <xf numFmtId="165" fontId="0" fillId="0" borderId="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="top"/></xf>
-    <xf numFmtId="164" fontId="0" fillId="7" borderId="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="top"/></xf>
-    <xf numFmtId="0" fontId="0" fillId="7" borderId="1" applyAlignment="1"><alignment horizontal="right" vertical="top"/></xf>
-    <xf numFmtId="165" fontId="0" fillId="7" borderId="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="top"/></xf>
+    <xf numFmtId="165" fontId="0" fillId="0" borderId="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="top" wrapText="1"/></xf>
+    <xf numFmtId="164" fontId="0" fillId="7" borderId="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="top" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="7" borderId="1" applyAlignment="1"><alignment horizontal="right" vertical="top" wrapText="1"/></xf>
+    <xf numFmtId="165" fontId="0" fillId="7" borderId="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="top" wrapText="1"/></xf>
   </cellXfs>
   <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
   <tableStyles count="0" defaultTableStyle="TableStyleMedium2" defaultPivotStyle="PivotStyleLight16"/>
@@ -1339,7 +1375,7 @@ function exportExcelReport(options = {}) {
         totalRow: {
           values: ["TỔNG", "", "", "", "", "", "", "", "", reportTotals.sales, "", reportTotals.commission, `${reportTotals.billCount} hợp lệ / ${reportTotals.canceledCount} hủy`, "", ""]
         },
-        widths: [13, 10, 14, 9, 20, 15, 20, 45, 16, 17, 12, 17, 16, 18, 30],
+        widths: [13, 10, 14, 9, 22, 16, 22, 52, 16, 18, 13, 18, 16, 20, 36],
         currencyColumns: [9, 11],
         numberColumns: [],
         percentageColumns: [10]
@@ -1484,7 +1520,7 @@ function currentShiftBills() {
 }
 
 function visibleBills() {
-  return isManager() ? state.bills : currentShiftBills();
+  return currentShiftBills();
 }
 
 function activeBills(bills) {
@@ -1827,8 +1863,8 @@ function renderAccountGroups() {
       <div class="summary-row">
         <span>
           <strong>${escapeHtml(group.workspaceName || "Bo tai khoan")}${current ? " (dang dung)" : ""}</strong>
-          <span class="row-meta">${manager?.role === "admin" ? "Admin" : "Quan Li"}: ${escapeHtml(manager?.id || group.managerId || "-")} / ${escapeHtml(manager?.password || "-")}</span>
-          <span class="row-meta">Thu Ngan: ${escapeHtml(cashier?.id || group.cashierId || "-")} / ${escapeHtml(cashier?.password || "-")}</span>
+          <span class="row-meta">${manager?.role === "admin" ? "Admin" : "Quan Li"}: ${escapeHtml(manager?.id || group.managerId || "-")}</span>
+          <span class="row-meta">Thu Ngan: ${escapeHtml(cashier?.id || group.cashierId || "-")}</span>
         </span>
         <span class="row-actions">
           <button class="small-button" data-edit-account="${escapeHtml(group.workspaceId)}">Sửa</button>
@@ -1890,12 +1926,12 @@ function fillAccountForm(workspaceId) {
   $("#accountWorkspaceId").value = workspaceId;
   $("#accountWorkspaceName").value = group.workspaceName || "";
   $("#accountManagerId").value = manager?.id || group.managerId || "";
-  $("#accountManagerPassword").value = manager?.password || "";
+  $("#accountManagerPassword").value = "";
   $("#accountCashierId").value = cashier?.id || group.cashierId || "";
-  $("#accountCashierPassword").value = cashier?.password || "";
+  $("#accountCashierPassword").value = "";
   $("#accountSubmitBtn").textContent = "Lưu tài khoản";
   $("#accountCancelEditBtn").classList.remove("is-hidden");
-  $("#accountStatus").textContent = "Đang sửa bộ tài khoản. Bấm Lưu tài khoản để cập nhật.";
+  $("#accountStatus").textContent = "Đang sửa bộ tài khoản. Nhập mật khẩu mới cho cả hai tài khoản rồi bấm Lưu.";
 }
 
 function renderBillHistory() {
@@ -1906,8 +1942,10 @@ function renderBillHistory() {
     .filter((bill) => billMatchesSearch(bill, term))
     .slice()
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  $("#historyTitle").textContent = isManager() ? "Tất cả bill trong hệ thống" : "Bill trong ca hiện tại";
-  $("#historyScope").textContent = isManager() ? "Quản lý xem cả đơn thanh toán và đơn hủy" : "Thu ngân chỉ thấy bill của ca này";
+  $("#historyTitle").textContent = "Bill trong ca hiện tại";
+  $("#historyScope").textContent = state.shift.isOpen
+    ? "Bill ca đang mở. Đơn hủy vẫn được kiểm soát."
+    : "Ca đã chốt. Lịch sử đã được lưu trong Excel và nhật ký bảo mật.";
 
   if (!bills.length) {
     const emptyText = term ? "Không tìm thấy hóa đơn phù hợp." : "Chưa có bill nào.";
@@ -2084,12 +2122,15 @@ function renderShiftLogs() {
   const body = $("#shiftLogBody");
   if (!body) return;
 
-  if (!state.shiftLogs.length) {
-    body.innerHTML = `<tr><td colspan="9">Chưa có ca nào đã kết.</td></tr>`;
+  const logs = state.shift.id
+    ? state.shiftLogs.filter((shift) => shift.id === state.shift.id)
+    : [];
+  if (!logs.length) {
+    body.innerHTML = `<tr><td colspan="9">Ca đã chốt sẽ được lưu vào Excel. Mở ca mới để bắt đầu lịch sử mới.</td></tr>`;
     return;
   }
 
-  body.innerHTML = state.shiftLogs.slice().sort((a, b) => new Date(b.closedAt) - new Date(a.closedAt)).map((shift) => {
+  body.innerHTML = logs.slice().sort((a, b) => new Date(b.closedAt) - new Date(a.closedAt)).map((shift) => {
     const payments = normalizePaymentTotals(shift.paymentTotals);
     return `
       <tr>
@@ -2111,9 +2152,11 @@ function renderSecurityLog() {
   const body = $("#securityLogBody");
   if (!body) return;
 
-  const entries = Array.isArray(state.securityLog) ? state.securityLog.slice(0, SECURITY_LOG_LIMIT) : [];
+  const entries = state.shift.id && Array.isArray(state.securityLog)
+    ? state.securityLog.filter((entry) => entry.shiftId === state.shift.id).slice(0, SECURITY_LOG_LIMIT)
+    : [];
   if (!entries.length) {
-    body.innerHTML = `<tr><td colspan="5">Chưa có nhật ký bảo mật.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="5">Nhật ký ca đã chốt được lưu an toàn trong dữ liệu và báo cáo.</td></tr>`;
     return;
   }
 
@@ -2285,26 +2328,59 @@ function submitCancelRequest(bill, reason) {
     : `Đã tạo yêu cầu hủy ${bill.invoiceNo}. Cần đồng bộ online để Quản Lí ở máy khác duyệt.`);
 }
 
-function cancelBill(billId) {
+function closeCancelBillDialog() {
+  const dialog = $("#cancelBillDialog");
+  if (!dialog) return;
+  dialog.classList.add("is-hidden");
+  dialog.setAttribute("aria-hidden", "true");
+  $("#cancelBillForm").reset();
+  $("#cancelBillError").textContent = "";
+}
+
+function openCancelBillDialog(billId) {
   const bill = state.bills.find((item) => item.id === billId);
   if (!bill || !canCancelBill(bill)) return;
-  const reason = prompt(`Nhập lý do hủy hóa đơn ${bill.invoiceNo || ""}:`);
-  if (reason === null) return;
-  const cleanReason = reason.trim();
+
+  const managerMode = isManager();
+  $("#cancelBillId").value = bill.id;
+  $("#cancelBillDialogTitle").textContent = managerMode ? "Hủy bill" : "Yêu cầu hủy bill";
+  $("#cancelBillDialogInfo").textContent = `${bill.invoiceNo} · ${bill.customer || "Khách lẻ"} · ${money(bill.total)}`;
+  $("#cancelBillDialogSubmit").textContent = managerMode ? "Xác nhận hủy" : "Gửi yêu cầu hủy";
+  $("#cancelBillError").textContent = "";
+  const dialog = $("#cancelBillDialog");
+  dialog.classList.remove("is-hidden");
+  dialog.setAttribute("aria-hidden", "false");
+  requestAnimationFrame(() => $("#cancelBillReason").focus());
+}
+
+function submitCancelBillForm(event) {
+  event.preventDefault();
+  const bill = state.bills.find((item) => item.id === $("#cancelBillId").value);
+  if (!bill || !canCancelBill(bill)) {
+    $("#cancelBillError").textContent = "Bill này không còn đủ điều kiện để hủy.";
+    return;
+  }
+  const cleanReason = $("#cancelBillReason").value.trim();
   if (!cleanReason) {
-    alert("Phải nhập lý do hủy đơn.");
+    $("#cancelBillError").textContent = "Hãy nhập lý do hủy bill.";
     return;
   }
 
   if (!isManager()) {
     submitCancelRequest(bill, cleanReason);
+    closeCancelBillDialog();
     return;
   }
 
   finalizeBillCancellation(bill, cleanReason);
   saveState();
   renderAll();
+  closeCancelBillDialog();
   showToast(`Đã hủy ${bill.invoiceNo}`);
+}
+
+function cancelBill(billId) {
+  openCancelBillDialog(billId);
 }
 
 function approveCancelRequest(requestId) {
@@ -2329,15 +2405,14 @@ function rejectCancelRequest(requestId) {
   if (!isManager()) return;
   const request = state.cancelRequests.find((item) => item.id === requestId && item.status === "pending");
   if (!request) return;
-  const note = prompt("Ghi chú từ chối (có thể để trống):");
-  if (note === null) return;
+  if (!confirm(`Từ chối yêu cầu hủy ${request.invoiceNo || "bill"}?`)) return;
   const bill = state.bills.find((item) => item.id === request.billId);
   request.status = "rejected";
   request.resolvedAt = new Date().toISOString();
   request.resolvedById = state.session.id;
   request.resolvedBy = state.session.name;
-  request.resolutionNote = note.trim();
-  logSecurity("Từ chối hủy bill", note.trim() || "Không ghi chú", bill || null);
+  request.resolutionNote = "Quản Lí từ chối yêu cầu hủy.";
+  logSecurity("Từ chối hủy bill", request.resolutionNote, bill || null);
   saveState();
   renderAll();
   showToast(`Đã từ chối yêu cầu hủy ${request.invoiceNo || "bill"}`);
@@ -2483,6 +2558,15 @@ function closeShift(options = {}) {
     "Kết ca",
     `Doanh thu ${money(report.sales)}, tiền mặt dự kiến ${money(report.expectedCash)}, thực tế ${money(report.closingCash)}, lệch ${money(report.difference)}`
   );
+  state.cancelRequests.forEach((request) => {
+    const bill = state.bills.find((item) => item.id === request.billId);
+    if (request.status !== "pending" || bill?.shiftId !== report.id) return;
+    request.status = "rejected";
+    request.resolvedAt = report.closedAt;
+    request.resolvedById = state.session?.id || "";
+    request.resolvedBy = state.session?.name || "Hệ thống";
+    request.resolutionNote = "Ca đã kết trước khi yêu cầu được duyệt.";
+  });
   state.shift = structuredClone(defaultState.shift);
   state.selectedServiceIds = [];
   saveState();
@@ -2522,6 +2606,10 @@ async function createAccountGroup(event) {
 
   if (!managerId || !managerPassword || !cashierId || !cashierPassword) {
     $("#accountStatus").textContent = "Hãy nhập đủ ID và mật khẩu cho Quản Lí / Thu Ngân.";
+    return;
+  }
+  if (!/^[A-Za-z0-9_-]{4,32}$/.test(managerId) || !/^[A-Za-z0-9_-]{4,32}$/.test(cashierId) || managerPassword.length < 6 || cashierPassword.length < 6) {
+    $("#accountStatus").textContent = "ID cần 4-32 ký tự chữ/số; mật khẩu cần tối thiểu 6 ký tự.";
     return;
   }
   if (managerId === cashierId) {
@@ -2591,10 +2679,8 @@ $("#loginForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const id = $("#loginId").value.trim();
   const password = $("#loginPassword").value;
-  let user = findLocalUser(id, password);
-  if (!user) {
-    user = await cloudLogin(id, password).catch(() => null);
-  }
+  let user = await cloudLogin(id, password).catch(() => null);
+  if (!user) user = findLocalUser(id, password);
 
   if (user) {
     const session = publicUser(user);
@@ -2615,7 +2701,12 @@ $("#loginForm").addEventListener("submit", async (event) => {
   $("#loginError").textContent = "Sai ID hoặc mật khẩu.";
 });
 
-$("#logoutBtn").addEventListener("click", () => {
+$("#logoutBtn").addEventListener("click", async () => {
+  fetch(apiUrl("/api/logout"), {
+    method: "POST",
+    headers: syncHeaders(),
+    credentials: "include"
+  }).catch(() => {});
   clearInterval(window.__ptSyncInterval);
   cloudStarted = false;
   pendingShiftExcel = null;
@@ -2792,6 +2883,16 @@ $("#cancelApprovalList").addEventListener("click", (event) => {
   if (rejectId) rejectCancelRequest(rejectId);
 });
 
+$("#cancelBillForm").addEventListener("submit", submitCancelBillForm);
+$("#cancelBillDialogClose").addEventListener("click", closeCancelBillDialog);
+$("#cancelBillDialogCancel").addEventListener("click", closeCancelBillDialog);
+$("#cancelBillDialog").addEventListener("click", (event) => {
+  if (event.target === event.currentTarget) closeCancelBillDialog();
+});
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeCancelBillDialog();
+});
+
 $("#openShiftForm").addEventListener("submit", (event) => {
   event.preventDefault();
   openShift();
@@ -2879,6 +2980,7 @@ window.addEventListener("appinstalled", () => {
 renderAll();
 startCloudSync();
 syncAccountGroups();
+restoreCloudSession();
 updateInstallButton();
 
 if ("serviceWorker" in navigator) {

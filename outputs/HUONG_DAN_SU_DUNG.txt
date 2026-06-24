@@ -42,6 +42,7 @@ HUONG DAN SU DUNG PT BARBERSHOP POS
 - Thu Ngan chi order, in bill, tinh tien, gui yeu cau huy don va ket ca.
 - Don bi huy khong bi xoa khoi he thong, ma hien trang thai Da huy de Quan Li xem lai.
 - Thu Ngan chi nhap ly do huy bill, sau do he thong gui yeu cau den tai khoan Quan Li/Admin de duyet hoac tu choi.
+- Nut Yeu cau huy mo form ngay trong app, dung tot tren iPhone/Android; khong dung hop nhap ID/mat khau Quan Li.
 - Thu Ngan khong xem duoc ly do/chi tiet huy don. Chi Quan Li moi xem duoc chi tiet huy don.
 - Khi dung Render + Postgres va co Internet, yeu cau huy se tu dong hien tren may/iPhone dang dang nhap Quan Li/Admin trong vai giay. Khong can dua mat khau Quan Li cho Thu Ngan.
 - Neu dung ban Render co database, server se chan Thu Ngan neu co tinh xoa bill, sua bill da luu, sua bang gia/nhan vien hoac huy bill truc tiep.
@@ -65,6 +66,7 @@ HUONG DAN SU DUNG PT BARBERSHOP POS
 - Vao tab Nhan vien de them nhan vien.
 - Vao tab Dau ca / Ket ca de nhap tien dau ca, chot ca va sao luu du lieu.
 - Nut In ket ca se chot ca va in phieu ket ca. Sau khi ket ca, doanh thu ca hien tai se ve 0 de mo ca moi.
+- Sau Ket ca, man hinh Bill trong ca va nhat ky cua ca dang lam se tro ve trong de bat dau ca moi gon gang. Bill cu, ket ca va nhat ky van duoc khoa trong du lieu/Excel, khong bi xoa that.
 - Neu da bam Ket ca truoc do, nut In ket ca se in lai ca vua ket gan nhat.
 
 10. So hoa don va so thu tu
@@ -105,6 +107,12 @@ HUONG DAN SU DUNG PT BARBERSHOP POS
 - He thong ghi Nhat ky bao mat khi luu bill, huy bill, mo ca, ket ca, khoi phuc du lieu.
 - Quan Li xem duoc ai thao tac, luc nao, voi hoa don nao.
 - Khoa manh nhat la chay ban Render Web Service + Postgres, vi server se tu choi luu du lieu neu Thu Ngan co tinh lam mat bill.
+
+16. Bao mat ban Render
+- Mat khau trong database duoc chuyen sang dang bam scrypt; web khong hien mat khau tren danh sach tai khoan.
+- Dang nhap online dung phien HttpOnly co ky so. Mat khau khong con gui lai moi lan dong bo bill.
+- Server co gioi han 8 lan dang nhap sai trong 15 phut tren moi ID/may, khoa bill da luu, chan sua gia/nhan vien tu tai khoan Thu Ngan va gui cac header bao mat trinh duyet.
+- Ban ZIP mo truc tiep khi khong co server chi la che do du phong, khong the co muc bao mat bang ban Render + Postgres. Muon dung nhieu may va chong can thiep, hay deploy dung Blueprint Render.
 
 15. Gui cho nguoi khac
 - Chi gui file ZIP khi ban da kiem tra xong.

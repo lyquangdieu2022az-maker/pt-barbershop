@@ -38,7 +38,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -147,7 +148,8 @@ label {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   min-height: 44px;
   border: 1px solid var(--line);
@@ -159,7 +161,8 @@ select {
 }
 
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   border-color: var(--blue);
   box-shadow: 0 0 0 3px rgba(15, 95, 184, 0.16);
 }
@@ -782,6 +785,59 @@ th {
   border-left-color: var(--danger);
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(8, 11, 16, 0.64);
+  backdrop-filter: blur(5px);
+}
+
+.modal-card {
+  width: min(520px, 100%);
+  border: 1px solid rgba(15, 95, 184, 0.35);
+  border-top: 4px solid var(--red);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: var(--shadow);
+  padding: 22px;
+}
+
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.modal-head h2 {
+  margin: 4px 0 0;
+  font-size: 23px;
+}
+
+.modal-copy {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.modal-card textarea {
+  min-height: 108px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.modal-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
 .receipt {
   width: 58mm;
   max-width: 58mm;
@@ -949,7 +1005,8 @@ th {
   .summary-row,
   .excel-report-actions,
   .backup-actions,
-  .bill-actions {
+  .bill-actions,
+  .modal-actions {
     align-items: start;
     grid-template-columns: 1fr;
   }

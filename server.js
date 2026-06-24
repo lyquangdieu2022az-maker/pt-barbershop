@@ -1,12 +1,19 @@
 const express = require("express");
 const path = require("path");
-const { randomUUID } = require("crypto");
+const crypto = require("crypto");
+const { randomUUID, randomBytes, scryptSync, timingSafeEqual, createHmac } = crypto;
 const { Pool } = require("pg");
 
 const app = express();
 const port = process.env.PORT || 3000;
 const outputsDir = path.join(__dirname, "outputs");
 const DEFAULT_WORKSPACE_ID = "pt-main";
+const SESSION_COOKIE_NAME = "pt_barbershop_session";
+const SESSION_DURATION_MS = 12 * 60 * 60 * 1000;
+const SESSION_SECRET = process.env.SESSION_SECRET || randomBytes(32).toString("hex");
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 8;
+const loginAttempts = new Map();
 
 const defaultUsers = new Map([
   ["9939", { password: "040426", role: "admin", name: "Admin", workspaceId: DEFAULT_WORKSPACE_ID, workspaceName: "PT Barbershop" }],
@@ -23,23 +30,32 @@ const pool = databaseUrl
 
 let dbReady = false;
 
+app.disable("x-powered-by");
+app.set("trust proxy", 1);
 app.use(express.json({ limit: "5mb" }));
 
 app.use((req, res, next) => {
-  const origin = req.get("Origin");
-  if (origin) {
-    res.set("Access-Control-Allow-Origin", origin);
-    res.set("Vary", "Origin");
-  }
-  res.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.set("Access-Control-Allow-Headers", [
-    "Content-Type",
-    "X-PT-User",
-    "X-PT-Password"
-  ].join(", "));
-  if (req.method === "OPTIONS") {
-    res.sendStatus(204);
-    return;
+  res.set("X-Content-Type-Options", "nosniff");
+  res.set("X-Frame-Options", "DENY");
+  res.set("Referrer-Policy", "same-origin");
+  res.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
+  res.set("Cross-Origin-Opener-Policy", "same-origin");
+  res.set("Cross-Origin-Resource-Policy", "same-origin");
+  res.set("Content-Security-Policy", [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self'",
+    "img-src 'self' data:",
+    "connect-src 'self'",
+    "worker-src 'self'",
+    "manifest-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'"
+  ].join("; "));
+  if (req.secure || process.env.NODE_ENV === "production") {
+    res.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   }
   next();
 });
@@ -47,12 +63,128 @@ app.use((req, res, next) => {
 function publicUser(user) {
   return user ? {
     id: user.id,
-    password: user.password,
     role: user.role,
     name: user.name,
     workspaceId: user.workspaceId || DEFAULT_WORKSPACE_ID,
     workspaceName: user.workspaceName || "PT Barbershop"
   } : null;
+}
+
+function passwordHash(password, salt = randomBytes(16).toString("hex")) {
+  const derived = scryptSync(String(password), salt, 64).toString("hex");
+  return "scrypt$" + salt + "$" + derived;
+}
+
+function passwordMatches(password, storedHash) {
+  const [scheme, salt, expected] = String(storedHash || "").split("$");
+  if (scheme !== "scrypt" || !salt || !expected) return false;
+  const actual = scryptSync(String(password), salt, 64).toString("hex");
+  const actualBytes = Buffer.from(actual, "hex");
+  const expectedBytes = Buffer.from(expected, "hex");
+  return actualBytes.length === expectedBytes.length && timingSafeEqual(actualBytes, expectedBytes);
+}
+
+function parseCookies(req) {
+  return String(req.get("Cookie") || "")
+    .split(";")
+    .reduce((cookies, part) => {
+      const index = part.indexOf("=");
+      if (index < 0) return cookies;
+      const key = part.slice(0, index).trim();
+      const value = part.slice(index + 1).trim();
+      if (key) cookies[key] = decodeURIComponent(value);
+      return cookies;
+    }, {});
+}
+
+function signSession(payload) {
+  const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const signature = createHmac("sha256", SESSION_SECRET).update(encoded).digest("base64url");
+  return encoded + "." + signature;
+}
+
+function readSession(req) {
+  const token = parseCookies(req)[SESSION_COOKIE_NAME];
+  if (!token || !token.includes(".")) return null;
+  const [encoded, signature] = token.split(".");
+  const expected = createHmac("sha256", SESSION_SECRET).update(encoded).digest("base64url");
+  const signatureBytes = Buffer.from(signature);
+  const expectedBytes = Buffer.from(expected);
+  if (signatureBytes.length !== expectedBytes.length || !timingSafeEqual(signatureBytes, expectedBytes)) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
+    return payload?.id && Number(payload.exp) > Date.now() ? payload : null;
+  } catch {
+    return null;
+  }
+}
+
+function issueSession(req, res, user) {
+  const expiresAt = Date.now() + SESSION_DURATION_MS;
+  res.cookie(SESSION_COOKIE_NAME, signSession({ id: user.id, exp: expiresAt }), {
+    httpOnly: true,
+    secure: Boolean(req.secure),
+    sameSite: "lax",
+    maxAge: SESSION_DURATION_MS,
+    path: "/"
+  });
+}
+
+function clearSession(req, res) {
+  res.clearCookie(SESSION_COOKIE_NAME, {
+    httpOnly: true,
+    secure: Boolean(req.secure),
+    sameSite: "lax",
+    path: "/"
+  });
+}
+
+function loginKey(req, id) {
+  return (req.ip || "unknown") + ":" + String(id || "").trim();
+}
+
+function isLoginLimited(req, id) {
+  const record = loginAttempts.get(loginKey(req, id));
+  if (!record) return false;
+  if (Date.now() - record.startedAt > LOGIN_WINDOW_MS) {
+    loginAttempts.delete(loginKey(req, id));
+    return false;
+  }
+  return record.count >= LOGIN_MAX_ATTEMPTS;
+}
+
+function recordLoginFailure(req, id) {
+  const key = loginKey(req, id);
+  const record = loginAttempts.get(key);
+  if (!record || Date.now() - record.startedAt > LOGIN_WINDOW_MS) {
+    loginAttempts.set(key, { count: 1, startedAt: Date.now() });
+    return;
+  }
+  record.count += 1;
+}
+
+function clearLoginFailures(req, id) {
+  loginAttempts.delete(loginKey(req, id));
+}
+
+function isValidAccountId(value) {
+  return /^[A-Za-z0-9_-]{4,32}$/.test(String(value || ""));
+}
+
+function isValidPassword(value) {
+  return String(value || "").length >= 6 && String(value || "").length <= 128;
+}
+
+function userFromRow(row) {
+  return {
+    id: row.id,
+    role: row.role,
+    name: row.name,
+    workspaceId: row.workspace_id,
+    workspaceName: row.workspace_name,
+    passwordHash: row.password_hash || "",
+    legacyPassword: row.password || ""
+  };
 }
 
 async function findUser(id, password) {
@@ -62,25 +194,38 @@ async function findUser(id, password) {
   }
   await ensureDb();
   const result = await pool.query(
-    "SELECT id, password, role, name, workspace_id, workspace_name FROM app_users WHERE id = $1 AND password = $2",
-    [String(id), String(password)]
+    "SELECT id, password, password_hash, role, name, workspace_id, workspace_name FROM app_users WHERE id = $1",
+    [String(id)]
   );
   if (!result.rows.length) return null;
-  const row = result.rows[0];
-  return {
-    id: row.id,
-    password: row.password,
-    role: row.role,
-    name: row.name,
-    workspaceId: row.workspace_id,
-    workspaceName: row.workspace_name
-  };
+  const user = userFromRow(result.rows[0]);
+  const valid = user.passwordHash
+    ? passwordMatches(password, user.passwordHash)
+    : user.legacyPassword === String(password);
+  if (!valid) return null;
+  if (!user.passwordHash || user.legacyPassword) {
+    await pool.query(
+      "UPDATE app_users SET password = '', password_hash = $2 WHERE id = $1",
+      [user.id, passwordHash(password)]
+    );
+  }
+  return user;
+}
+
+async function findUserById(id) {
+  const fallback = defaultUsers.get(String(id));
+  if (!pool) return fallback ? { id: String(id), ...fallback } : null;
+  await ensureDb();
+  const result = await pool.query(
+    "SELECT id, password, password_hash, role, name, workspace_id, workspace_name FROM app_users WHERE id = $1",
+    [String(id)]
+  );
+  return result.rows.length ? userFromRow(result.rows[0]) : null;
 }
 
 async function requireAuth(req, res, next) {
-  const id = String(req.get("X-PT-User") || "");
-  const password = String(req.get("X-PT-Password") || "");
-  const user = await findUser(id, password).catch(() => null);
+  const session = readSession(req);
+  const user = session ? await findUserById(session.id).catch(() => null) : null;
   if (!user) {
     res.status(401).json({ error: "Unauthorized" });
     return;
@@ -270,6 +415,7 @@ async function ensureDb() {
     CREATE TABLE IF NOT EXISTS app_users (
       id text PRIMARY KEY,
       password text NOT NULL,
+      password_hash text,
       role text NOT NULL CHECK (role IN ('admin', 'manager', 'cashier')),
       name text NOT NULL,
       workspace_id text NOT NULL REFERENCES account_groups(workspace_id) ON DELETE CASCADE,
@@ -277,8 +423,18 @@ async function ensureDb() {
       created_at timestamptz NOT NULL DEFAULT now()
     )
   `);
+  await pool.query("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS password_hash text");
   await pool.query("ALTER TABLE app_users DROP CONSTRAINT IF EXISTS app_users_role_check");
   await pool.query("ALTER TABLE app_users ADD CONSTRAINT app_users_role_check CHECK (role IN ('admin', 'manager', 'cashier'))");
+  const legacyUsers = await pool.query(
+    "SELECT id, password FROM app_users WHERE COALESCE(password_hash, '') = '' AND password <> ''"
+  );
+  for (const user of legacyUsers.rows) {
+    await pool.query(
+      "UPDATE app_users SET password = '', password_hash = $2 WHERE id = $1",
+      [user.id, passwordHash(user.password)]
+    );
+  }
   await pool.query(`
     CREATE TABLE IF NOT EXISTS workspace_states (
       workspace_id text PRIMARY KEY REFERENCES account_groups(workspace_id) ON DELETE CASCADE,
@@ -297,12 +453,12 @@ async function ensureDb() {
   for (const [id, user] of defaultUsers.entries()) {
     await pool.query(
       `
-        INSERT INTO app_users (id, password, role, name, workspace_id, workspace_name)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO app_users (id, password, password_hash, role, name, workspace_id, workspace_name)
+        VALUES ($1, '', $2, $3, $4, $5, $6)
         ON CONFLICT (id)
-        DO UPDATE SET password = EXCLUDED.password, role = EXCLUDED.role, name = EXCLUDED.name, workspace_id = EXCLUDED.workspace_id, workspace_name = EXCLUDED.workspace_name
+        DO NOTHING
       `,
-      [id, user.password, user.role, user.name, user.workspaceId, user.workspaceName]
+      [id, passwordHash(user.password), user.role, user.name, user.workspaceId, user.workspaceName]
     );
   }
   const legacyTable = await pool.query("SELECT to_regclass('public.app_state') AS table_name");
@@ -329,11 +485,18 @@ app.post("/api/login", async (req, res, next) => {
   try {
     const id = String(req.body?.id || "");
     const password = String(req.body?.password || "");
+    if (isLoginLimited(req, id)) {
+      res.status(429).json({ error: "Too many login attempts. Try again later." });
+      return;
+    }
     const user = await findUser(id, password);
     if (!user) {
+      recordLoginFailure(req, id);
       res.status(401).json({ error: "Unauthorized" });
       return;
     }
+    clearLoginFailures(req, id);
+    issueSession(req, res, user);
     let group = {
       workspaceId: user.workspaceId,
       workspaceName: user.workspaceName,
@@ -358,12 +521,11 @@ app.post("/api/login", async (req, res, next) => {
         };
       }
       const usersResult = await pool.query(
-        "SELECT id, password, role, name, workspace_id, workspace_name FROM app_users WHERE workspace_id = $1",
+        "SELECT id, role, name, workspace_id, workspace_name FROM app_users WHERE workspace_id = $1",
         [user.workspaceId]
       );
       usersInWorkspace = usersResult.rows.map((row) => publicUser({
         id: row.id,
-        password: row.password,
         role: row.role,
         name: row.name,
         workspaceId: row.workspace_id,
@@ -380,6 +542,16 @@ app.post("/api/login", async (req, res, next) => {
   }
 });
 
+app.get("/api/session", requireAuth, (req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json({ user: publicUser(req.user) });
+});
+
+app.post("/api/logout", (req, res) => {
+  clearSession(req, res);
+  res.status(204).end();
+});
+
 app.get("/api/account-groups", requireAuth, async (req, res, next) => {
   try {
     if (req.user.role !== "admin") {
@@ -388,13 +560,12 @@ app.get("/api/account-groups", requireAuth, async (req, res, next) => {
     }
     await ensureDb();
     const groups = await pool.query("SELECT workspace_id, workspace_name, manager_id, cashier_id, created_at FROM account_groups ORDER BY created_at ASC");
-    const usersResult = await pool.query("SELECT id, password, role, name, workspace_id, workspace_name FROM app_users ORDER BY created_at ASC");
+    const usersResult = await pool.query("SELECT id, role, name, workspace_id, workspace_name FROM app_users ORDER BY created_at ASC");
     const usersByWorkspace = new Map();
     usersResult.rows.forEach((row) => {
       const workspaceUsers = usersByWorkspace.get(row.workspace_id) || [];
       workspaceUsers.push(publicUser({
         id: row.id,
-        password: row.password,
         role: row.role,
         name: row.name,
         workspaceId: row.workspace_id,
@@ -430,7 +601,7 @@ app.post("/api/account-groups", requireAuth, async (req, res, next) => {
     const managerPassword = String(req.body?.managerPassword || "").trim();
     const cashierId = String(req.body?.cashierId || "").trim();
     const cashierPassword = String(req.body?.cashierPassword || "").trim();
-    if (!managerId || !managerPassword || !cashierId || !cashierPassword || managerId === cashierId) {
+    if (!isValidAccountId(managerId) || !isValidPassword(managerPassword) || !isValidAccountId(cashierId) || !isValidPassword(cashierPassword) || managerId === cashierId) {
       res.status(400).json({ error: "Invalid account data" });
       return;
     }
@@ -442,8 +613,8 @@ app.post("/api/account-groups", requireAuth, async (req, res, next) => {
     const workspaceId = `pt-${randomUUID()}`;
     const group = { workspaceId, workspaceName, managerId, cashierId, createdAt: new Date().toISOString() };
     const users = [
-      { id: managerId, password: managerPassword, role: "manager", name: `Quan Li ${workspaceName}`, workspaceId, workspaceName },
-      { id: cashierId, password: cashierPassword, role: "cashier", name: `Thu Ngan ${workspaceName}`, workspaceId, workspaceName }
+      { id: managerId, passwordHash: passwordHash(managerPassword), role: "manager", name: `Quan Li ${workspaceName}`, workspaceId, workspaceName },
+      { id: cashierId, passwordHash: passwordHash(cashierPassword), role: "cashier", name: `Thu Ngan ${workspaceName}`, workspaceId, workspaceName }
     ];
     await pool.query("BEGIN");
     try {
@@ -453,8 +624,8 @@ app.post("/api/account-groups", requireAuth, async (req, res, next) => {
       );
       for (const user of users) {
         await pool.query(
-          "INSERT INTO app_users (id, password, role, name, workspace_id, workspace_name) VALUES ($1, $2, $3, $4, $5, $6)",
-          [user.id, user.password, user.role, user.name, workspaceId, workspaceName]
+          "INSERT INTO app_users (id, password, password_hash, role, name, workspace_id, workspace_name) VALUES ($1, '', $2, $3, $4, $5, $6)",
+          [user.id, user.passwordHash, user.role, user.name, workspaceId, workspaceName]
         );
       }
       await pool.query("COMMIT");
@@ -462,7 +633,7 @@ app.post("/api/account-groups", requireAuth, async (req, res, next) => {
       await pool.query("ROLLBACK");
       throw error;
     }
-    res.status(201).json({ online: true, group, users });
+    res.status(201).json({ online: true, group, users: users.map(publicUser) });
   } catch (error) {
     next(error);
   }
@@ -481,7 +652,7 @@ app.put("/api/account-groups/:workspaceId", requireAuth, async (req, res, next) 
     const managerPassword = String(req.body?.managerPassword || "").trim();
     const cashierId = String(req.body?.cashierId || "").trim();
     const cashierPassword = String(req.body?.cashierPassword || "").trim();
-    if (!workspaceId || !managerId || !managerPassword || !cashierId || !cashierPassword || managerId === cashierId) {
+    if (!workspaceId || !isValidAccountId(managerId) || !isValidPassword(managerPassword) || !isValidAccountId(cashierId) || !isValidPassword(cashierPassword) || managerId === cashierId) {
       res.status(400).json({ error: "Invalid account data" });
       return;
     }
@@ -506,8 +677,8 @@ app.put("/api/account-groups/:workspaceId", requireAuth, async (req, res, next) 
     const managerRole = existingAdmin.rows.length ? "admin" : "manager";
     const managerName = managerRole === "admin" ? "Admin" : `Quan Li ${workspaceName}`;
     const users = [
-      { id: managerId, password: managerPassword, role: managerRole, name: managerName, workspaceId, workspaceName },
-      { id: cashierId, password: cashierPassword, role: "cashier", name: `Thu Ngan ${workspaceName}`, workspaceId, workspaceName }
+      { id: managerId, passwordHash: passwordHash(managerPassword), role: managerRole, name: managerName, workspaceId, workspaceName },
+      { id: cashierId, passwordHash: passwordHash(cashierPassword), role: "cashier", name: `Thu Ngan ${workspaceName}`, workspaceId, workspaceName }
     ];
     await pool.query("BEGIN");
     try {
@@ -518,8 +689,8 @@ app.put("/api/account-groups/:workspaceId", requireAuth, async (req, res, next) 
       await pool.query("DELETE FROM app_users WHERE workspace_id = $1", [workspaceId]);
       for (const user of users) {
         await pool.query(
-          "INSERT INTO app_users (id, password, role, name, workspace_id, workspace_name) VALUES ($1, $2, $3, $4, $5, $6)",
-          [user.id, user.password, user.role, user.name, workspaceId, workspaceName]
+          "INSERT INTO app_users (id, password, password_hash, role, name, workspace_id, workspace_name) VALUES ($1, '', $2, $3, $4, $5, $6)",
+          [user.id, user.passwordHash, user.role, user.name, workspaceId, workspaceName]
         );
       }
       await pool.query("COMMIT");
@@ -530,7 +701,7 @@ app.put("/api/account-groups/:workspaceId", requireAuth, async (req, res, next) 
     res.json({
       online: true,
       group: { workspaceId, workspaceName, managerId, cashierId, createdAt: "" },
-      users
+      users: users.map(publicUser)
     });
   } catch (error) {
     next(error);
