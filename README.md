@@ -109,9 +109,8 @@ Neu dau trang hien `Dong bo: Luu tren may nay`, backend/database chua ket noi ne
 
 ## Ket ca
 
-- Sau Ket ca, man hinh bill cua ca dang lam tro ve trong de bat dau ca moi gon gang. Du lieu bill/ket ca cu van nam trong Excel, database va file sao luu da khoa.
-- Nut `Ket ca` se chot ca va dua doanh thu ca hien tai ve 0.
-- Nut `In ket ca` se chot ca, in phieu ket ca, roi dua doanh thu ca hien tai ve 0.
+- Nut Ket ca chi chot so lieu va giu man hinh de kiem tra doanh thu, tien thuc te va chenh lech.
+- Bam In ket ca & ve ca moi sau khi kiem tra xong. Luc do app in phieu va dua man hinh ca hien tai ve 0.
 - Neu da chot ca truoc do, `In ket ca` se in lai ca vua ket gan nhat.
 - Phieu ket ca in ro doanh thu theo tien mat, chuyen khoan, the va khac.
 

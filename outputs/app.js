@@ -1945,7 +1945,9 @@ function renderBillHistory() {
   $("#historyTitle").textContent = "Bill trong ca hiện tại";
   $("#historyScope").textContent = state.shift.isOpen
     ? "Bill ca đang mở. Đơn hủy vẫn được kiểm soát."
-    : "Ca đã chốt. Lịch sử đã được lưu trong Excel và nhật ký bảo mật.";
+    : state.shift.id
+      ? "Ca đã chốt. Kiểm tra chênh lệch rồi bấm In kết ca để reset ca mới."
+      : "Ca đã chốt. Lịch sử đã được lưu trong Excel và nhật ký bảo mật.";
 
   if (!bills.length) {
     const emptyText = term ? "Không tìm thấy hóa đơn phù hợp." : "Chưa có bill nào.";
@@ -2090,6 +2092,12 @@ function renderShift() {
   $("#openingCash").placeholder = state.shift.isOpen ? String(state.shift.openingCash || 0) : "0";
   $("#closingCash").value = hasClosed ? Number(state.shift.closingCash || 0) : "";
   $("#closingCash").placeholder = String(expectedCash);
+  $("#openingCash").disabled = Boolean(state.shift.id);
+  $("#closingCash").disabled = hasClosed;
+  $("#closeShiftBtn").disabled = !state.shift.isOpen;
+  $("#printShiftBtn").textContent = hasClosed
+    ? "In kết ca & về ca mới"
+    : "In kết ca";
 
   const staffRows = isManager() ? commissionByStaff(bills).map(([name, amount]) => `
     <div class="summary-row">
@@ -2097,6 +2105,9 @@ function renderShift() {
       <strong>${money(amount)}</strong>
     </div>
   `).join("") : "";
+  const closeNotice = hasClosed
+    ? '<p class="backup-status">Đã chốt ca. Kiểm tra chênh lệch, sau đó bấm In kết ca &amp; về ca mới để reset màn hình.</p>'
+    : "";
 
   $("#shiftSummary").innerHTML = `
     <div class="summary-row"><span>Lưu dữ liệu</span><strong>${syncOnline ? "Đã đồng bộ online" : "Đang lưu trên máy này"}</strong></div>
@@ -2115,6 +2126,7 @@ function renderShift() {
     ${staffRows || (isManager() ? `<p class="empty-state">Chưa có tiền chia nhân viên.</p>` : "")}
     <div class="summary-row"><span>Tiền thực tế kết ca</span><strong>${hasClosed ? money(state.shift.closingCash) : "-"}</strong></div>
     <div class="summary-row"><span>Chênh lệch</span><strong class="${difference >= 0 ? "ok" : "danger-text"}">${hasClosed ? money(difference) : "-"}</strong></div>
+    ${closeNotice}
   `;
 }
 
@@ -2504,6 +2516,10 @@ function openShift() {
     alert("Ca hiện tại đang mở. Hãy kết ca trước khi mở ca mới.");
     return;
   }
+  if (state.shift.id && state.shift.closedAt) {
+    alert("Ca đã kết. Hãy bấm In kết ca để kiểm tra xong và đưa màn hình về ca mới.");
+    return;
+  }
 
   state.shift = {
     id: crypto.randomUUID(),
@@ -2567,8 +2583,6 @@ function closeShift(options = {}) {
     request.resolvedBy = state.session?.name || "Hệ thống";
     request.resolutionNote = "Ca đã kết trước khi yêu cầu được duyệt.";
   });
-  state.shift = structuredClone(defaultState.shift);
-  state.selectedServiceIds = [];
   saveState();
   renderAll();
   const shiftExcel = isManager() ? exportExcelReport({
@@ -2582,12 +2596,21 @@ function closeShift(options = {}) {
     toastMessage: "Đã tạo Excel chi tiết kết ca"
   }) : null;
   showToast(shiftExcel
-    ? "Đã kết ca. Doanh thu ca mới về 0, Excel chi tiết đã sẵn sàng để tải."
-    : "Đã kết ca. Doanh thu ca hiện tại đã về 0.");
+    ? "Đã chốt ca. Kiểm tra chênh lệch rồi bấm In kết ca để đưa ca mới về 0."
+    : "Đã chốt ca. Kiểm tra chênh lệch rồi bấm In kết ca để đưa ca mới về 0.");
   if (options.print) {
     printShiftReport(report);
+    resetShiftAfterPrinting();
   }
   return report;
+}
+
+function resetShiftAfterPrinting() {
+  state.shift = structuredClone(defaultState.shift);
+  state.selectedServiceIds = [];
+  saveState();
+  renderAll();
+  showToast("Đã in kết ca. Màn hình đã sẵn sàng cho ca mới.");
 }
 
 async function createAccountGroup(event) {
@@ -2907,6 +2930,14 @@ $("#printShiftBtn").addEventListener("click", () => {
   if (state.shift.isOpen) {
     closeShift({ print: true });
     return;
+  }
+  if (state.shift.id && state.shift.closedAt) {
+    const currentReport = state.shiftLogs.find((shift) => shift.id === state.shift.id);
+    if (currentReport) {
+      printShiftReport(currentReport);
+      resetShiftAfterPrinting();
+      return;
+    }
   }
   const latestReport = state.shiftLogs.slice().sort((a, b) => new Date(b.closedAt) - new Date(a.closedAt))[0];
   if (latestReport) {

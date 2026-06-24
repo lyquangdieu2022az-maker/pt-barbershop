@@ -65,8 +65,9 @@ HUONG DAN SU DUNG PT BARBERSHOP POS
 - Vao tab Bang gia & % de them/sua gia va % chia nhan vien.
 - Vao tab Nhan vien de them nhan vien.
 - Vao tab Dau ca / Ket ca de nhap tien dau ca, chot ca va sao luu du lieu.
-- Nut In ket ca se chot ca va in phieu ket ca. Sau khi ket ca, doanh thu ca hien tai se ve 0 de mo ca moi.
-- Sau Ket ca, man hinh Bill trong ca va nhat ky cua ca dang lam se tro ve trong de bat dau ca moi gon gang. Bill cu, ket ca va nhat ky van duoc khoa trong du lieu/Excel, khong bi xoa that.
+- Nut Ket ca chi chot so lieu va giu nguyen man hinh de kiem tra doanh thu, tien thuc te va chenh lech.
+- Sau khi kiem tra, bam In ket ca & ve ca moi. Luc nay phieu ket ca duoc in va man hinh Bill/nhat ky ca hien tai moi ve trong de mo ca moi.
+- Bill cu, ket ca va nhat ky van duoc khoa trong du lieu/Excel, khong bi xoa that.
 - Neu da bam Ket ca truoc do, nut In ket ca se in lai ca vua ket gan nhat.
 
 10. So hoa don va so thu tu
