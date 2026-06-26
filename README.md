@@ -2,6 +2,11 @@
 
 Bo web order/barbershop POS cho PT Barbershop.
 
+## Tai khoan
+
+- Admin: `9939` / `040426`
+- Thu Ngan: `3122` / `152004`
+
 ## Deploy len Render co dong bo online
 
 Ban dong bo online can Render Web Service + Postgres. Nen dung Blueprint.
@@ -55,7 +60,7 @@ Neu dau trang hien `Dong bo: Luu tren may nay`, backend/database chua ket noi ne
 
 ## Admin quan ly tai khoan
 
-- 
+- Dang nhap Admin bang `9939` / `040426`.
 - Vao tab `Tai khoan`.
 - Co the tim theo ID, ten bo/chi nhanh hoac vai tro.
 - Co the tao khong gioi han bo tai khoan/chi nhanh, sua ID/mat khau va xoa bo tai khoan khac.
@@ -98,10 +103,18 @@ Neu dau trang hien `Dong bo: Luu tren may nay`, backend/database chua ket noi ne
 - Bill da luu duoc khoa: khong co sua bill va khong co xoa bill.
 - Nut `In bill` se luu hoa don vao he thong truoc roi moi in, khong con in hoa don nhap.
 - Sau khi da in/luu, `Xoa dich vu` chi xoa bill dang soan moi, khong xoa duoc hoa don da luu.
+- Tung bill co ma xac thuc va chuoi khoa hoa don. Man hinh Live se canh bao neu chuoi khoa bi dut hoac core bill bi can thiep.
+- Bill in ra co tem xac thuc va ma dang `PT-xxxxxx-xxxxxx`; Excel cung co cot ma xac thuc va khoa bill.
 - Thu Ngan muon huy bill chi nhap ly do; khong can va khong duoc nhap ID/mat khau Quan Li.
 - Quan Li xem duoc `Nhat ky chong da bill` trong tab `Dau ca / Ket ca`.
 - Nhat ky ghi lai luu bill, huy bill, mo ca, ket ca va khoi phuc du lieu.
 - Neu chay bang Render Web Service + Postgres, server se chan Thu Ngan neu co tinh xoa bill, sua bill cu, sua bang gia/nhan vien hoac huy bill truc tiep. Thu Ngan chi duoc tao yeu cau huy bill dang cho Quan Li/Admin duyet.
+
+## Command Center Pro
+
+- Man hinh Order co Live Command Center: doanh thu ca, STT tiep theo, do an toan bill, yeu cau huy dang cho duyet, khach quen va nhan vien noi bat.
+- Khi nhap so dien thoai, app tu nhan dien khach quen: so lan ghe, tong chi va dich vu gan nhat.
+- Canh bao thong minh hien khi co don huy cho duyet, ket tien lech, chuyen khoan can doi soat hoac chuoi khoa bill co van de.
 
 ## Thanh toan
 
@@ -122,7 +135,7 @@ Neu dau trang hien `Dong bo: Luu tren may nay`, backend/database chua ket noi ne
 - Admin va Quan Li co nut `Xuat Excel 30 ngay` trong tab `Dau ca / Ket ca`.
 - File `.xlsx` co phong cach PT Barbershop, ten thuong hieu va chi nhanh dang dang nhap.
 - File gom 4 tab: `Tong hop 30 ngay`, `Chi tiet bill`, `Chia tho theo ngay`, `Tong chia tung tho`.
-- Chi tiet bill co so HD, khach, tho cat/lam, dich vu, thanh toan, doanh thu, % chia, tien chia va trang thai huy.
+- Chi tiet bill co so HD, ma xac thuc, khoa bill, khach, tho cat/lam, dich vu, thanh toan, doanh thu, % chia, tien chia va trang thai huy.
 - Khi Admin/Quan Li bam `Ket ca`, doanh thu ca moi ve 0 va Excel chi tiet cua ca vua chot duoc tao san. Bam `Tai Excel ket ca` de luu file vao may.
 - Bill va nhat ky bao mat van duoc khoa tren he thong sau Ket ca de giu chong da bill.
 

@@ -271,6 +271,14 @@ function billCore(bill = {}) {
   };
 }
 
+function billLockedSnapshot(bill = {}) {
+  const copy = { ...bill };
+  delete copy.previousBillHash;
+  delete copy.billHash;
+  delete copy.verifyCode;
+  return copy;
+}
+
 function cancelRequestCore(request = {}) {
   return {
     id: request.id || "",
@@ -348,11 +356,11 @@ function requireCashierSafeUpdate(previous, next, req) {
     if (stableStringify(billCore(oldBill)) !== stableStringify(billCore(newBill))) {
       throw securityError(`Bảo mật: Bill ${oldBill.invoiceNo || oldBill.id} đã khóa, không được sửa.`);
     }
-    if (newBill.status === oldBill.status && stableStringify(oldBill) !== stableStringify(newBill)) {
+    if (newBill.status === oldBill.status && stableStringify(billLockedSnapshot(oldBill)) !== stableStringify(billLockedSnapshot(newBill))) {
       throw securityError("Saved bill cannot be edited.");
     }
     if (oldBill.status === "canceled") {
-      if (stableStringify(oldBill) !== stableStringify(newBill)) {
+      if (stableStringify(billLockedSnapshot(oldBill)) !== stableStringify(billLockedSnapshot(newBill))) {
         throw securityError(`Bảo mật: Bill đã hủy ${oldBill.invoiceNo || oldBill.id} không được sửa lại.`);
       }
       continue;

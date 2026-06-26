@@ -171,6 +171,70 @@ function paymentLabel(method) {
   return paymentNames[safePaymentMethod(method)];
 }
 
+function stableDataString(value) {
+  if (Array.isArray(value)) return `[${value.map(stableDataString).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableDataString(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function simpleHash(value) {
+  const text = String(value || "");
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).toUpperCase().padStart(8, "0");
+}
+
+function billSecurityPayload(bill = {}, previousHash = "") {
+  return {
+    id: bill.id || "",
+    createdAt: bill.createdAt || "",
+    invoiceSequence: Number(bill.invoiceSequence || 0),
+    invoiceNo: bill.invoiceNo || "",
+    queueNo: Number(bill.queueNo || 0),
+    customer: bill.customer || "",
+    phone: bill.phone || "",
+    staffId: bill.staffId || "",
+    staffName: bill.staffName || "",
+    note: bill.note || "",
+    paymentMethod: safePaymentMethod(bill.paymentMethod),
+    shiftId: bill.shiftId || "",
+    createdBy: bill.createdBy || "",
+    items: Array.isArray(bill.items) ? bill.items.map((item) => ({
+      id: item.id || "",
+      category: item.category || "",
+      name: item.name || "",
+      price: Number(item.price || 0),
+      commission: Number(item.commission || 0)
+    })) : [],
+    total: Number(bill.total || 0),
+    commission: Number(bill.commission || 0),
+    previousHash: previousHash || ""
+  };
+}
+
+function billHashFor(bill, previousHash = bill?.previousBillHash || "") {
+  return simpleHash(stableDataString(billSecurityPayload(bill, previousHash)));
+}
+
+function billVerifyCode(bill) {
+  const hash = bill.billHash || billHashFor(bill, bill.previousBillHash || "");
+  return `PT-${String(bill.invoiceNo || "HD000000").replace(/\D/g, "").slice(-6)}-${hash.slice(0, 6)}`;
+}
+
+function receiptSealHtml(code = "") {
+  const seed = simpleHash(code || "PT");
+  const bits = Array.from({ length: 49 }, (_, index) => {
+    const char = seed.charCodeAt(index % seed.length);
+    return ((char + index * 17) % 5) < 2 ? " on" : "";
+  });
+  return `<div class="receipt-seal" aria-label="Tem xác thực">${bits.map((bit) => `<i class="${bit.trim()}"></i>`).join("")}</div>`;
+}
+
 function emptyPaymentTotals() {
   return paymentOrder.reduce((totals, method) => {
     totals[method] = 0;
@@ -411,11 +475,25 @@ function normalizeState(nextState) {
       approvedBy: bill.approvedBy || "",
       approvedAt: bill.approvedAt || "",
       locked: bill.locked !== false,
+      previousBillHash: bill.previousBillHash || "",
+      billHash: bill.billHash || "",
+      verifyCode: bill.verifyCode || "",
       items,
       total,
       commission
     };
   }) : [];
+
+  nextState.bills
+    .slice()
+    .sort((left, right) => Number(left.invoiceSequence || 0) - Number(right.invoiceSequence || 0) || new Date(left.createdAt) - new Date(right.createdAt))
+    .forEach((bill, index, orderedBills) => {
+      const previousBill = orderedBills[index - 1];
+      const previousHash = bill.previousBillHash || previousBill?.billHash || "";
+      if (!bill.previousBillHash) bill.previousBillHash = previousHash;
+      if (!bill.billHash) bill.billHash = billHashFor(bill, previousHash);
+      if (!bill.verifyCode) bill.verifyCode = billVerifyCode(bill);
+    });
 
   nextState.shiftLogs = nextState.shiftLogs.map((shift) => {
     const hasPayments = paymentOrder.some((method) => Number(shift.paymentTotals?.[method] || 0));
@@ -1326,6 +1404,8 @@ function exportExcelReport(options = {}) {
       excelDateLabel(excelDayKey(bill.createdAt)),
       excelTimeLabel(bill.createdAt),
       bill.invoiceNo || "-",
+      bill.verifyCode || billVerifyCode(bill),
+      bill.billHash || "-",
       bill.queueNo ? `#${bill.queueNo}` : "-",
       bill.customer || "Khách lẻ",
       bill.phone || "",
@@ -1415,15 +1495,15 @@ function exportExcelReport(options = {}) {
         title,
         subtitle,
         info,
-        headers: ["Ngày", "Giờ", "Số HĐ", "STT", "Khách", "SĐT", "Thợ cắt/làm", "Dịch vụ", "Thanh toán", "Doanh thu", "% chia TB", "Chia thợ", "Trạng thái", "Thu ngân", "Lý do hủy"],
+        headers: ["Ngày", "Giờ", "Số HĐ", "Mã xác thực", "Khóa bill", "STT", "Khách", "SĐT", "Thợ cắt/làm", "Dịch vụ", "Thanh toán", "Doanh thu", "% chia TB", "Chia thợ", "Trạng thái", "Thu ngân", "Lý do hủy"],
         rows: detailRows,
         totalRow: {
-          values: ["TỔNG", "", "", "", "", "", "", "", "", reportTotals.sales, "", reportTotals.commission, `${reportTotals.billCount} hợp lệ / ${reportTotals.canceledCount} hủy`, "", ""]
+          values: ["TỔNG", "", "", "", "", "", "", "", "", "", "", reportTotals.sales, "", reportTotals.commission, `${reportTotals.billCount} hợp lệ / ${reportTotals.canceledCount} hủy`, "", ""]
         },
-        widths: [13, 10, 14, 9, 22, 16, 22, 52, 16, 18, 13, 18, 16, 20, 36],
-        currencyColumns: [9, 11],
+        widths: [13, 10, 14, 18, 14, 9, 22, 16, 22, 52, 16, 18, 13, 18, 16, 20, 36],
+        currencyColumns: [11, 13],
         numberColumns: [],
-        percentageColumns: [10]
+        percentageColumns: [12]
       })
     },
     {
@@ -1612,6 +1692,92 @@ function paymentRowsHtml(totals) {
   `).join("");
 }
 
+function phoneKey(phone = "") {
+  return String(phone || "").replace(/\D/g, "");
+}
+
+function customerProfiles() {
+  const profiles = new Map();
+  activeBills(state.bills).forEach((bill) => {
+    const key = phoneKey(bill.phone);
+    if (!key) return;
+    const profile = profiles.get(key) || {
+      phone: bill.phone,
+      name: bill.customer || "Khách lẻ",
+      visits: 0,
+      total: 0,
+      lastAt: "",
+      lastServices: ""
+    };
+    profile.visits += 1;
+    profile.total += Number(bill.total || 0);
+    if (!profile.lastAt || new Date(bill.createdAt) > new Date(profile.lastAt)) {
+      profile.name = bill.customer || profile.name;
+      profile.phone = bill.phone || profile.phone;
+      profile.lastAt = bill.createdAt;
+      profile.lastServices = (bill.items || []).map((item) => item.name).join(", ");
+    }
+    profiles.set(key, profile);
+  });
+  return profiles;
+}
+
+function customerProfileForPhone(phone) {
+  return customerProfiles().get(phoneKey(phone));
+}
+
+function billIntegrityReport() {
+  const orderedBills = state.bills
+    .slice()
+    .sort((left, right) => Number(left.invoiceSequence || 0) - Number(right.invoiceSequence || 0) || new Date(left.createdAt) - new Date(right.createdAt));
+  const issues = [];
+  let previousHash = "";
+  let expectedSequence = orderedBills[0]?.invoiceSequence ? Number(orderedBills[0].invoiceSequence) : 1;
+  orderedBills.forEach((bill) => {
+    const expectedHash = billHashFor(bill, bill.previousBillHash || previousHash);
+    if (bill.billHash && bill.billHash !== expectedHash) {
+      issues.push(`${bill.invoiceNo || bill.id}: mã khóa lệch`);
+    }
+    if (bill.previousBillHash && previousHash && bill.previousBillHash !== previousHash) {
+      issues.push(`${bill.invoiceNo || bill.id}: chuỗi khóa đứt`);
+    }
+    if (Number(bill.invoiceSequence || 0) > expectedSequence) {
+      issues.push(`Thiếu số HĐ ${formatInvoiceNo(expectedSequence)}`);
+    }
+    previousHash = bill.billHash || expectedHash;
+    expectedSequence = Number(bill.invoiceSequence || expectedSequence) + 1;
+  });
+  return {
+    billCount: orderedBills.length,
+    issueCount: issues.length,
+    issues: issues.slice(0, 5),
+    score: orderedBills.length ? Math.max(0, Math.round((1 - issues.length / Math.max(orderedBills.length, 1)) * 100)) : 100
+  };
+}
+
+function shiftInsights() {
+  const bills = currentShiftBills();
+  const totals = totalsForBills(bills);
+  const payments = paymentTotalsForBills(bills);
+  const integrity = billIntegrityReport();
+  const pendingCancels = state.cancelRequests.filter((request) => request.status === "pending").length;
+  const insights = [];
+
+  if (!state.shift.isOpen && !state.shift.closedAt) insights.push({ tone: "warn", text: "Chưa mở ca, hãy nhập tiền đầu ca trước khi nhận khách." });
+  if (state.shift.isOpen && !bills.length) insights.push({ tone: "ok", text: "Ca đang sạch, sẵn sàng nhận bill đầu tiên." });
+  if (pendingCancels) insights.push({ tone: "danger", text: `${pendingCancels} yêu cầu hủy đang chờ Quản Lý duyệt.` });
+  if (totals.canceledCount >= 2) insights.push({ tone: "danger", text: `Ca này có ${totals.canceledCount} đơn hủy, nên kiểm tra lại lý do hủy.` });
+  if (state.shift.closedAt) {
+    const expectedCash = Number(state.shift.openingCash || 0) + payments.cash;
+    const difference = Number(state.shift.closingCash || 0) - expectedCash;
+    if (difference) insights.push({ tone: difference > 0 ? "warn" : "danger", text: `Két lệch ${money(difference)} so với tiền mặt dự kiến.` });
+  }
+  if (integrity.issueCount) insights.push({ tone: "danger", text: `Phát hiện ${integrity.issueCount} cảnh báo chuỗi khóa hóa đơn.` });
+  if (!integrity.issueCount && totals.billCount) insights.push({ tone: "ok", text: "Chuỗi khóa hóa đơn đang sạch, chưa thấy dấu hiệu sửa/xóa bill." });
+  if (payments.transfer > payments.cash && payments.transfer) insights.push({ tone: "ok", text: "Chuyển khoản đang cao hơn tiền mặt, kết ca cần đối chiếu ngân hàng." });
+  return insights.slice(0, 4);
+}
+
 function commissionByStaff(bills) {
   const rows = new Map();
   activeBills(bills).forEach((bill) => {
@@ -1636,6 +1802,8 @@ function billMatchesSearch(bill, term) {
   if (!term) return true;
   return [
     bill.invoiceNo,
+    bill.verifyCode,
+    bill.billHash,
     bill.invoiceSequence,
     bill.queueNo,
     `#${bill.queueNo}`,
@@ -1650,6 +1818,7 @@ function billIdentityHtml(bill) {
   return `
     <strong>${escapeHtml(bill.invoiceNo || "-")}</strong>
     <div class="row-meta">STT chờ: #${escapeHtml(bill.queueNo || "-")}</div>
+    <div class="verify-chip">${escapeHtml(bill.verifyCode || billVerifyCode(bill))}</div>
   `;
 }
 
@@ -1749,6 +1918,56 @@ function renderQuickStats() {
   `;
 }
 
+function renderProCommandCenter() {
+  const container = $("#quickStats");
+  if (!container) return;
+
+  const shiftBills = currentShiftBills();
+  const shiftTotals = totalsForBills(shiftBills);
+  const paymentTotals = paymentTotalsForBills(shiftBills);
+  const staffRows = commissionByStaff(shiftBills).sort((a, b) => b[1] - a[1]);
+  const topStaff = staffRows.length ? `${staffRows[0][0]} - ${money(staffRows[0][1])}` : "Chưa có";
+  const pendingCancels = state.cancelRequests.filter((request) => request.status === "pending").length;
+  const integrity = billIntegrityReport();
+  const profiles = customerProfiles();
+  const vipCustomers = Array.from(profiles.values()).filter((profile) => profile.visits >= 2).length;
+  const nextQueue = state.shift.isOpen ? `#${Number(state.shift.queueCounter || 0) + 1}` : "Mở ca";
+  const insights = shiftInsights();
+
+  container.innerHTML = `
+    <section class="command-center">
+      <article class="command-hero">
+        <span class="command-kicker">PT Barbershop Live</span>
+        <strong>${money(shiftTotals.sales)}</strong>
+        <small>${shiftTotals.billCount} bill hợp lệ · STT tiếp theo ${nextQueue}</small>
+      </article>
+      <article class="metric-tile accent-blue">
+        <span>An toàn bill</span>
+        <strong>${integrity.score}%</strong>
+        <small>${integrity.issueCount ? `${integrity.issueCount} cảnh báo` : "Chuỗi khóa sạch"}</small>
+      </article>
+      <article class="metric-tile accent-red">
+        <span>Chờ duyệt hủy</span>
+        <strong>${pendingCancels}</strong>
+        <small>${shiftTotals.canceledCount} đơn đã hủy trong ca</small>
+      </article>
+      <article class="metric-tile">
+        <span>Khách quen</span>
+        <strong>${vipCustomers}</strong>
+        <small>${profiles.size} hồ sơ có SĐT</small>
+      </article>
+      <article class="metric-tile ${isManager() ? "" : "is-muted"}">
+        <span>${isManager() ? "Nhân viên nổi bật" : "Tiền mặt ca"}</span>
+        <strong>${isManager() ? escapeHtml(topStaff) : money(paymentTotals.cash)}</strong>
+        <small>${isManager() ? `Chia ${money(shiftTotals.commission)}` : `CK ${money(paymentTotals.transfer)}`}</small>
+      </article>
+    </section>
+    <section class="insight-strip">
+      ${insights.length ? insights.map((item) => `<div class="insight ${item.tone}">${escapeHtml(item.text)}</div>`).join("") : `<div class="insight ok">Hệ thống ổn định, chưa có cảnh báo mới.</div>`}
+    </section>
+  `;
+}
+
 function renderStaffSelect() {
   const select = $("#orderStaff");
   const current = select.value;
@@ -1797,6 +2016,7 @@ function renderBillPreview() {
   const nextQueueText = state.shift.isOpen ? `#${Number(state.shift.queueCounter || 0) + 1}` : "Chưa mở ca";
   const customer = $("#customerName").value.trim() || "Khách lẻ";
   const phone = $("#customerPhone").value.trim();
+  const profile = customerProfileForPhone(phone);
   const paymentMethod = $("#paymentMethod").value;
 
   if (!services.length) {
@@ -1815,6 +2035,17 @@ function renderBillPreview() {
       <span>Nhân viên: ${escapeHtml(staff?.name || "Chưa chọn")}</span>
       <span>Thanh toán: ${paymentLabel(paymentMethod)}</span>
     </div>
+    ${profile ? `
+      <div class="customer-signal">
+        <strong>Khách quen: ${profile.visits} lần</strong>
+        <span>Tổng chi ${money(profile.total)} · Gần nhất ${receiptTimeText(profile.lastAt)} · ${escapeHtml(profile.lastServices || "Chưa rõ dịch vụ")}</span>
+      </div>
+    ` : phone ? `
+      <div class="customer-signal">
+        <strong>Khách mới</strong>
+        <span>SĐT này chưa có lịch sử trong hệ thống.</span>
+      </div>
+    ` : ""}
     ${services.map((service) => `
       <div class="bill-line">
         <span>${escapeHtml(service.name)} <small>(${escapeHtml(categoryNames[service.category])}${isManager() ? `, ${service.commission}%` : ""})</small></span>
@@ -2064,6 +2295,7 @@ function renderBillHistory() {
             <strong>${escapeHtml(bill.customer)}</strong>
             <div class="bill-card-meta">
               <span>${escapeHtml(bill.invoiceNo || "-")} - STT #${escapeHtml(bill.queueNo || "-")}</span>
+              <span>Mã: ${escapeHtml(bill.verifyCode || billVerifyCode(bill))}</span>
               <span>${timeText(bill.createdAt)}</span>
               <span>Nhân viên: ${escapeHtml(bill.staffName)}</span>
               <span>Thanh toán: ${paymentLabel(bill.paymentMethod)}</span>
@@ -2254,6 +2486,7 @@ function renderAll() {
   renderServices();
   renderBillPreview();
   renderQuickStats();
+  renderProCommandCenter();
   renderCatalog();
   renderStaffList();
   renderAccountGroups();
@@ -2280,7 +2513,7 @@ function clearSelectedServices() {
   state.selectedServiceIds = [];
   saveState();
   renderAll();
-  showToast(`Đã mở ca với ${money(state.shift.openingCash)}`);
+  showToast("Đã xóa dịch vụ đang chọn.");
 }
 
 function saveBill(options = {}) {
@@ -2305,6 +2538,8 @@ function saveBill(options = {}) {
   const { total, commission } = billTotals(services);
   const invoiceSequence = nextInvoiceSequence();
   const queueNo = nextQueueNumber();
+  const previousBill = state.bills.slice().sort((left, right) => Number(right.invoiceSequence || 0) - Number(left.invoiceSequence || 0))[0];
+  const previousBillHash = previousBill?.billHash || "";
   const bill = {
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
@@ -2331,8 +2566,13 @@ function saveBill(options = {}) {
       commission: Number(service.commission || 0)
     })),
     total,
-    commission
+    commission,
+    previousBillHash,
+    billHash: "",
+    verifyCode: ""
   };
+  bill.billHash = billHashFor(bill, previousBillHash);
+  bill.verifyCode = billVerifyCode(bill);
   state.bills.push(bill);
   logSecurity(
     "Lưu bill",
@@ -2506,6 +2746,8 @@ function printBill(bill) {
       ${bill.phone ? `<div class="receipt-row"><span>SĐT</span><strong>${escapeHtml(bill.phone)}</strong></div>` : ""}
       <div class="receipt-row"><span>Nhân viên</span><strong>${escapeHtml(bill.staffName)}</strong></div>
       <div class="receipt-row"><span>Thanh toán</span><strong>${paymentLabel(bill.paymentMethod)}</strong></div>
+      <div class="receipt-row"><span>Mã xác thực</span><strong>${escapeHtml(bill.verifyCode || billVerifyCode(bill))}</strong></div>
+      ${receiptSealHtml(bill.verifyCode || billVerifyCode(bill))}
       ${bill.status === "canceled" ? `<div class="receipt-status">Đơn đã hủy</div>` : ""}
       ${bill.status === "canceled" && isManager() ? `<div class="receipt-row"><span>Lý do hủy</span><strong>${escapeHtml(bill.cancelReason || "Không ghi")}</strong></div>` : ""}
       ${bill.status === "canceled" && isManager() ? `<div class="receipt-row"><span>QL duyệt</span><strong>${escapeHtml(bill.approvedBy || "-")}</strong></div>` : ""}

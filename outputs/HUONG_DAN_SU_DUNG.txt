@@ -96,13 +96,20 @@ HUONG DAN SU DUNG PT BARBERSHOP POS
 - Bill da luu duoc khoa: khong co nut sua bill, khong co xoa bill.
 - Nut In bill se luu hoa don vao he thong truoc roi moi in, khong con in hoa don nhap.
 - Sau khi da in/luu, bam Xoa dich vu chi xoa bill dang soan moi, khong xoa duoc hoa don da luu.
+- Ban Pro co ma xac thuc tren tung bill va chuoi khoa hoa don. Neu bill bi can thiep/sua core du lieu, man hinh thong minh se hien canh bao an toan bill.
+- Bill in ra co tem xac thuc va ma dang PT-xxxxxx-xxxxxx de Quan Ly doi chieu tren lich su bill/Excel.
 
-14. Bao cao Excel
+14. Command Center va khach quen
+- Man hinh Order co bang Live PT Barbershop: doanh thu ca, STT tiep theo, do an toan bill, yeu cau huy dang cho duyet, khach quen va nhan vien noi bat.
+- Khi nhap So dien thoai khach, he thong tu nhan dien khach cu: so lan da den, tong chi va dich vu gan nhat.
+- Cac canh bao thong minh se hien neu co don huy cho duyet, ket tien lech, chuoi khoa bill bi dut hoac co dau hieu can xem lai.
+
+15. Bao cao Excel
 - Chi Admin va Quan Li duoc xuat Excel.
 - Vao tab Dau ca / Ket ca, bam Xuat Excel 30 ngay.
 - File Excel co ten thuong hieu PT Barbershop va ten chi nhanh dang dang nhap.
 - File gom 4 tab: Tong hop 30 ngay, Chi tiet bill, Chia tho theo ngay, Tong chia tung tho.
-- Chi tiet bill co so HD, khach, tho cat/lam, dich vu, thanh toan, doanh thu, % chia, tien chia va trang thai huy.
+- Chi tiet bill co so HD, ma xac thuc, khoa bill, khach, tho cat/lam, dich vu, thanh toan, doanh thu, % chia, tien chia va trang thai huy.
 - Khi Admin/Quan Li bam Ket ca, doanh thu ca moi tro ve 0 va Excel chi tiet cua ca vua chot duoc tao san.
 - Sau Ket ca, bam Tai Excel ket ca de luu file vao may. Trinh duyet dien thoai/may tinh co the chan tai tu dong, nen nut nay dam bao file duoc tai chac chan.
 - Bill da luu va nhat ky van duoc khoa tren he thong de chong da bill; khong bi xoa am tham sau Ket ca.
@@ -117,6 +124,6 @@ HUONG DAN SU DUNG PT BARBERSHOP POS
 - Server co gioi han 8 lan dang nhap sai trong 15 phut tren moi ID/may, khoa bill da luu, chan sua gia/nhan vien tu tai khoan Thu Ngan va gui cac header bao mat trinh duyet.
 - Ban ZIP mo truc tiep khi khong co server chi la che do du phong, khong the co muc bao mat bang ban Render + Postgres. Muon dung nhieu may va chong can thiep, hay deploy dung Blueprint Render.
 
-15. Gui cho nguoi khac
+17. Gui cho nguoi khac
 - Chi gui file ZIP khi ban da kiem tra xong.
 - Nguoi nhan giai nen ZIP truoc, sau do mo index.html.
