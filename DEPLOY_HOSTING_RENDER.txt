@@ -6,7 +6,9 @@ Luu y quan trong:
 - Muon dong bo that thi phai deploy bang Render Blueprint de tao Web Service + Postgres.
 - Khong chon Static Site cho ban dong bo online.
 - Khi deploy dung, may tinh tao bill thi iPhone se thay, iPhone huy bill thi may tinh se cap nhat.
-- Neu database bi tat/chua cau hinh, web van luu tam tren may do va hien trang thai "Luu tren may nay".
+- Neu database bi tat/chua cau hinh, bill co the luu tam tren may do va hien trang thai "Luu tren may nay".
+- Rieng phan tao/sua/xoa tai khoan online se bi chan khi server/database loi, de tranh tao tai khoan chi nam tren 1 may roi dien thoai khong thay.
+- Admin dang mo tren nhieu may se tu keo danh sach ID/chi nhanh moi tu server sau vai giay.
 - Van nen dung nut Tai file sao luu dinh ky de phong truong hop can khoi phuc.
 - Tinh nang chong da bill manh nhat khi dung Web Service + Postgres: server se chan Thu Ngan neu co tinh xoa/sua bill da luu. Thu Ngan chi gui yeu cau huy; Quan Li/Admin tu duyet bang tai khoan cua minh.
 - Blueprint tu tao SESSION_SECRET. Password duoc bam trong Postgres va dong bo online dung phien HttpOnly, khong gui lai password theo tung bill.
@@ -36,7 +38,14 @@ Cau hinh da chuan bi san:
 Sau khi deploy xong, Render se cap link dang:
 https://pt-barbershop-pos.onrender.com
 
+Ten mien:
+- Link dang *.onrender.com la mien phi.
+- Neu muon ten mien rieng dep nhu ptbarbershop.com hoac ptbarbershop.vn thi thuong phai mua ten mien.
+- Render mien phi phan gan custom domain va SSL/HTTPS, nhung phi mua ten mien la cua nha cung cap ten mien.
+- Co the dung tam link onrender.com de gui khach xem va cai PWA tren iPhone/Android.
+
 Neu ban deploy bang Static Site hoac Netlify:
 - Web van mo duoc.
 - Nhung khong co database online.
 - May tinh va iPhone se khong tu dong dong bo.
+- Tai khoan/chi nhanh tao moi se khong dung chung on dinh giua cac may.

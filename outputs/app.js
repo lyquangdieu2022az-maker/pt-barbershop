@@ -3,6 +3,7 @@ const ACCOUNT_STORE_KEY = "barbershop-accounts-v1";
 const SESSION_KEY = "barbershop-session-v1";
 const BACKUP_VERSION = 1;
 const SYNC_INTERVAL_MS = 2500;
+const ACCOUNT_SYNC_INTERVAL_MS = 3500;
 const API_BASE_URL = String(window.PT_API_BASE_URL || "").replace(/\/+$/, "");
 const DEFAULT_WORKSPACE_ID = "pt-main";
 
@@ -94,6 +95,8 @@ let cloudPendingSave = false;
 let applyingRemoteState = false;
 let lastRemoteUpdatedAt = "";
 let syncOnline = false;
+let accountSyncOnline = false;
+let accountSyncStatus = "Chưa kiểm tra";
 let toastTimer = null;
 let deferredInstallPrompt = null;
 let pendingShiftExcel = null;
@@ -108,6 +111,20 @@ const receiptTimeText = (iso) => iso ? new Date(iso).toLocaleString("vi-VN", {
   minute: "2-digit"
 }) : "";
 const apiUrl = (path) => `${API_BASE_URL}${path}`;
+
+function isFileOfflineMode() {
+  return window.location.protocol === "file:";
+}
+
+function canUseLocalLoginFallback() {
+  return isFileOfflineMode() || window.navigator.onLine === false;
+}
+
+function accountSyncMessage() {
+  if (accountSyncOnline) return `${accountSyncStatus} - mọi máy sẽ thấy cùng danh sách ID`;
+  if (isFileOfflineMode()) return "Bản offline dự phòng - tài khoản chỉ nằm trên máy này";
+  return `${accountSyncStatus} - kiểm tra Render/Postgres trước khi giao khách`;
+}
 
 function isRunningAsApp() {
   return window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone === true;
@@ -519,7 +536,12 @@ async function cloudLogin(id, password) {
     credentials: "include",
     body: JSON.stringify({ id, password })
   });
-  if (!response.ok) return null;
+  if (!response.ok) {
+    const errorPayload = await response.json().catch(() => ({}));
+    const error = new Error(errorPayload.error || "Không đăng nhập được server.");
+    error.status = response.status;
+    throw error;
+  }
   const payload = await response.json();
   if (payload.user) {
     mergeAccountGroup(payload.group, payload.users || [payload.user]);
@@ -555,26 +577,42 @@ async function restoreCloudSession() {
     renderAll();
     setActiveTab("order");
     startCloudSync();
-    syncAccountGroups();
+    syncAccountGroups({ silent: true });
   } catch {
     // Offline mode requires a fresh local login.
   }
 }
 
-async function syncAccountGroups() {
-  if (!isAdmin()) return;
+async function syncAccountGroups(options = {}) {
+  if (!isAdmin()) return false;
+  const silent = options.silent !== false;
   try {
     const response = await fetch(apiUrl("/api/account-groups"), {
       headers: syncHeaders(),
       credentials: "include",
       cache: "no-store"
     });
-    if (!response.ok) return;
+    if (!response.ok) {
+      const errorPayload = await response.json().catch(() => ({}));
+      const error = new Error(errorPayload.error || "Không đồng bộ được tài khoản.");
+      error.status = response.status;
+      throw error;
+    }
     const payload = await response.json();
     (payload.groups || []).forEach((group) => mergeAccountGroup(group, group.users || []));
+    accountSyncOnline = true;
+    accountSyncStatus = `Online ${new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}`;
     renderAccountGroups();
+    return true;
   } catch {
-    // Offline/static mode still uses account groups saved on this device.
+    accountSyncOnline = false;
+    accountSyncStatus = isFileOfflineMode() ? "Offline dự phòng" : "Chưa nối được server tài khoản";
+    renderAccountGroups();
+    if (!silent) {
+      const status = $("#accountStatus");
+      if (status) status.textContent = accountSyncMessage();
+    }
+    return false;
   }
 }
 
@@ -686,12 +724,19 @@ async function startCloudSync() {
   setSyncStatus("Đang đồng bộ", false);
   try {
     await pullCloudState();
+    if (isAdmin()) syncAccountGroups({ silent: true });
     cloudBooting = false;
     if (cloudPendingSave) scheduleCloudSave();
     clearInterval(window.__ptSyncInterval);
+    clearInterval(window.__ptAccountSyncInterval);
     window.__ptSyncInterval = setInterval(() => {
       pullCloudState().catch(() => setSyncStatus("Lưu trên máy này", false));
     }, SYNC_INTERVAL_MS);
+    if (isAdmin()) {
+      window.__ptAccountSyncInterval = setInterval(() => {
+        syncAccountGroups({ silent: true });
+      }, ACCOUNT_SYNC_INTERVAL_MS);
+    }
   } catch {
     cloudBooting = false;
     setSyncStatus("Lưu trên máy này", false);
@@ -1848,7 +1893,13 @@ function renderAccountGroups() {
     ].join(" ").toLowerCase();
     return !term || searchable.includes(term);
   });
-  const totalText = `<p class="backup-status account-limit-note">Đang có ${accountState.groups.length} bộ tài khoản. Có thể tạo không giới hạn chi nhánh, chỉ cần ID không trùng.</p>`;
+  const totalText = `
+    <div class="account-sync-card ${accountSyncOnline ? "is-online" : "is-warning"}">
+      <strong>${accountSyncOnline ? "Tài khoản đang đồng bộ online" : "Tài khoản chưa chắc đã online"}</strong>
+      <span>${escapeHtml(accountSyncMessage())}</span>
+    </div>
+    <p class="backup-status account-limit-note">Đang có ${accountState.groups.length} bộ tài khoản. Có thể tạo không giới hạn chi nhánh, chỉ cần ID không trùng.</p>
+  `;
 
   if (!groups.length) {
     container.innerHTML = `${totalText}<p class="empty-state">Không tìm thấy tài khoản phù hợp.</p>`;
@@ -1880,7 +1931,9 @@ function resetAccountForm() {
   $("#accountWorkspaceId").value = "";
   $("#accountSubmitBtn").textContent = "Tạo bộ tài khoản";
   $("#accountCancelEditBtn").classList.add("is-hidden");
-  $("#accountStatus").textContent = "Tạo không giới hạn chi nhánh, chỉ cần ID không trùng nhau.";
+  $("#accountStatus").textContent = accountSyncOnline
+    ? "Tạo không giới hạn chi nhánh, dữ liệu sẽ đồng bộ qua server online."
+    : accountSyncMessage();
 }
 
 function accountIdExists(id, exceptWorkspaceId = "") {
@@ -2658,6 +2711,16 @@ async function createAccountGroup(event) {
       showToast("ID đã tồn tại", "danger");
       return;
     }
+    if (!isFileOfflineMode()) {
+      accountSyncOnline = false;
+      accountSyncStatus = window.navigator.onLine === false ? "Máy đang offline" : "Lỗi server/database";
+      $("#accountStatus").textContent = window.navigator.onLine === false
+        ? "Máy đang offline nên chưa thể tạo tài khoản dùng chung. Kết nối mạng rồi tạo lại để điện thoại/máy khác thấy ngay."
+        : "Chưa tạo được trên server online. Hãy kiểm tra Render đã có Postgres/DATABASE_URL rồi tạo lại, tránh tài khoản chỉ nằm ở một máy.";
+      renderAccountGroups();
+      showToast("Chưa tạo tài khoản online", "danger");
+      return;
+    }
     const workspaceId = editWorkspaceId || `pt-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 6)}`;
     const existingAdmin = accountState.users.find((user) => user.workspaceId === workspaceId && user.role === "admin");
     created = {
@@ -2671,6 +2734,11 @@ async function createAccountGroup(event) {
   }
 
   mergeAccountGroup(created.group, created.users || []);
+  if (created.online !== false) {
+    accountSyncOnline = true;
+    accountSyncStatus = `Online ${new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}`;
+    syncAccountGroups({ silent: true });
+  }
   if (created.group?.workspaceId === activeWorkspaceId()) {
     const updatedSession = (created.users || []).find((user) => ["admin", "manager"].includes(user.role)) || (created.users || [])[0];
     if (updatedSession) {
@@ -2702,8 +2770,14 @@ $("#loginForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const id = $("#loginId").value.trim();
   const password = $("#loginPassword").value;
-  let user = await cloudLogin(id, password).catch(() => null);
-  if (!user) user = findLocalUser(id, password);
+  let cloudError = null;
+  let user = null;
+  try {
+    user = await cloudLogin(id, password);
+  } catch (error) {
+    cloudError = error;
+  }
+  if (!user && (!cloudError || canUseLocalLoginFallback())) user = findLocalUser(id, password);
 
   if (user) {
     const session = publicUser(user);
@@ -2718,10 +2792,16 @@ $("#loginForm").addEventListener("submit", async (event) => {
     renderAll();
     setActiveTab("order");
     startCloudSync();
-    syncAccountGroups();
+    syncAccountGroups({ silent: true });
     return;
   }
-  $("#loginError").textContent = "Sai ID hoặc mật khẩu.";
+  if (cloudError?.status === 429) {
+    $("#loginError").textContent = "Nhập sai quá nhiều lần. Chờ một chút rồi thử lại.";
+  } else if (cloudError && !canUseLocalLoginFallback() && cloudError.status !== 401) {
+    $("#loginError").textContent = "Chưa kết nối được server/database online. Kiểm tra Render rồi đăng nhập lại.";
+  } else {
+    $("#loginError").textContent = "Sai ID hoặc mật khẩu.";
+  }
 });
 
 $("#logoutBtn").addEventListener("click", async () => {
@@ -2731,7 +2811,10 @@ $("#logoutBtn").addEventListener("click", async () => {
     credentials: "include"
   }).catch(() => {});
   clearInterval(window.__ptSyncInterval);
+  clearInterval(window.__ptAccountSyncInterval);
   cloudStarted = false;
+  accountSyncOnline = false;
+  accountSyncStatus = "Chưa kiểm tra";
   pendingShiftExcel = null;
   state.session = null;
   state.loggedIn = false;
@@ -2980,7 +3063,13 @@ $("#accountGroupList").addEventListener("click", async (event) => {
   try {
     await deleteCloudAccountGroup(deleteId);
   } catch {
-    // Static/offline mode removes the local account only.
+    if (!isFileOfflineMode()) {
+      accountSyncOnline = false;
+      accountSyncStatus = window.navigator.onLine === false ? "Máy đang offline" : "Lỗi server/database";
+      renderAccountGroups();
+      showToast("Chưa xóa được trên server online", "danger");
+      return;
+    }
   }
   accountState.groups = accountState.groups.filter((item) => item.workspaceId !== deleteId);
   accountState.users = accountState.users.filter((user) => user.workspaceId !== deleteId);
@@ -3008,9 +3097,23 @@ window.addEventListener("appinstalled", () => {
   showToast("App PT Barbershop đã sẵn sàng");
 });
 
+function refreshCloudNow() {
+  if (!isLoggedIn()) return;
+  pullCloudState().catch(() => setSyncStatus("Lưu trên máy này", false));
+  if (isAdmin()) syncAccountGroups({ silent: true });
+}
+
+window.addEventListener("focus", refreshCloudNow);
+window.addEventListener("online", () => {
+  if (isLoggedIn()) startCloudSync();
+});
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) refreshCloudNow();
+});
+
 renderAll();
 startCloudSync();
-syncAccountGroups();
+syncAccountGroups({ silent: true });
 restoreCloudSession();
 updateInstallButton();
 

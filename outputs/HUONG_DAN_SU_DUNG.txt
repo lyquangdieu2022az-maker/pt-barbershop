@@ -35,6 +35,7 @@ HUONG DAN SU DUNG PT BARBERSHOP POS
 - Neu deploy bang Render Blueprint co database, may tinh va dien thoai se dung chung du lieu online.
 - Khi dong bo online hoat dong, dau trang se hien Dong bo: Online.
 - Neu dong bo hien "Luu tren may nay", nghia la backend/database chua ket noi hoac dang mat mang. Luc do du lieu chi luu tam tren thiet bi dang dung.
+- Rieng phan tai khoan/chi nhanh: ban online se khong cho tao/sua/xoa tai khoan neu server/database loi. Cach nay tranh viec tao tai khoan o may tinh nhung dien thoai khong thay.
 - Van nen tai file sao luu dinh ky de phong truong hop can khoi phuc.
 
 7. Quyen tai khoan
@@ -59,7 +60,8 @@ HUONG DAN SU DUNG PT BARBERSHOP POS
 - Moi bo tai khoan co bill, doanh thu, dau ca/ket ca va nhan vien rieng.
 - Bo 1 va bo 2 khong anh huong doanh thu cua nhau.
 - Neu dung Render Web Service + Postgres, ID vua tao co the dang nhap tren may tinh/iPhone khac.
-- Neu chay offline/local, ID moi chi luu tren thiet bi dang tao.
+- Admin dang mo tren nhieu may se tu cap nhat danh sach ID/chi nhanh moi tu server sau vai giay.
+- Neu chay file offline du phong, ID moi chi luu tren thiet bi dang tao.
 
 9. Chinh gia, dich vu, nhan vien
 - Vao tab Bang gia & % de them/sua gia va % chia nhan vien.

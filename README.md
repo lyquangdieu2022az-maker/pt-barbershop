@@ -70,7 +70,15 @@ Neu dau trang hien `Dong bo: Luu tren may nay`, backend/database chua ket noi ne
 - Moi bo tai khoan co bill, doanh thu, dau ca/ket ca va nhan vien rieng.
 - Bo 1 va bo 2 khong anh huong doanh thu cua nhau.
 - Khi dung Render Web Service + Postgres, ID vua tao co the dang nhap tren may tinh/iPhone khac.
-- Neu dang chay offline/local, ID moi chi luu tren thiet bi dang tao.
+- Admin dang mo tren nhieu may se tu cap nhat danh sach ID/chi nhanh moi tu server sau vai giay.
+- Neu dang chay file offline du phong, ID moi chi luu tren thiet bi dang tao.
+- Ban online se khong am tham tao tai khoan local khi server/database loi, de tranh may tinh thay ma dien thoai khong thay.
+
+## Ten mien
+
+- Link Render dang `*.onrender.com` dung duoc mien phi.
+- Render mien phi phan gan custom domain va SSL/HTTPS cho web service.
+- Ten mien rieng dep nhu `.com`, `.vn` thuong phai mua tu nha cung cap ten mien; neu chua mua thi dung link `onrender.com` truoc la on nhat.
 
 ## Hoa don
 

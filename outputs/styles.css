@@ -753,6 +753,38 @@ th {
   font-weight: 800;
 }
 
+.account-sync-card {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+  border: 1px solid rgba(15, 95, 184, 0.24);
+  border-left: 5px solid var(--blue);
+  border-radius: 8px;
+  background: linear-gradient(135deg, #ffffff, #edf4fb);
+  padding: 12px 14px;
+  box-shadow: 0 12px 28px rgba(15, 35, 68, 0.08);
+}
+
+.account-sync-card strong {
+  color: var(--charcoal);
+  font-size: 15px;
+}
+
+.account-sync-card span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.account-sync-card.is-online {
+  border-left-color: var(--ok);
+}
+
+.account-sync-card.is-warning {
+  border-left-color: var(--red);
+  background: linear-gradient(135deg, #ffffff, #fff1f2);
+}
+
 .ok {
   color: var(--ok);
 }
