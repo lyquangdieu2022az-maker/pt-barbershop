@@ -1,10 +1,10 @@
-const CACHE_NAME = "barbershop-order-offline-v42";
+const CACHE_NAME = "barbershop-order-offline-v44";
 const APP_FILES = [
   "./",
   "./index.html",
   "./app-config.js",
-  "./styles.css",
-  "./app.js",
+  "./styles.css?v=44",
+  "./app.js?v=44",
   "./manifest.webmanifest",
   "./assets/logo.jpg",
   "./assets/apple-touch-icon.png",

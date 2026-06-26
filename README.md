@@ -4,8 +4,13 @@ Bo web order/barbershop POS cho PT Barbershop.
 
 ## Tai khoan
 
-- Admin: `9939` / `040426`
-- Thu Ngan: `3122` / `152004`
+- Khong ghi ID/mat khau that trong GitHub.
+- Ban Render lay tai khoan goc tu Environment Variables rieng tu:
+  - `PT_ADMIN_ID`
+  - `PT_ADMIN_PASSWORD`
+  - `PT_CASHIER_ID`
+  - `PT_CASHIER_PASSWORD`
+- Ban offline mo truc tiep file `index.html` se cho tao Admin local lan dau bang ID/mat khau tu dat tren may do.
 
 ## Deploy len Render co dong bo online
 
@@ -25,6 +30,8 @@ Render se doc file `render.yaml` san co va tao:
 - Database: `pt-barbershop-db`
 
 Khong chon `Static Site` neu muon may tinh/iPhone tu dong dong bo.
+
+Sau khi Render tao service, vao `Environment` va nhap 4 bien `PT_ADMIN_ID`, `PT_ADMIN_PASSWORD`, `PT_CASHIER_ID`, `PT_CASHIER_PASSWORD` neu Render yeu cau. Khong dua cac gia tri nay vao README hoac code public.
 
 ## Cai thanh app tren iPhone/Android
 
@@ -60,7 +67,7 @@ Neu dau trang hien `Dong bo: Luu tren may nay`, backend/database chua ket noi ne
 
 ## Admin quan ly tai khoan
 
-- Dang nhap Admin bang `9939` / `040426`.
+- Dang nhap Admin bang ID/mat khau da dat trong Render Environment Variables.
 - Vao tab `Tai khoan`.
 - Co the tim theo ID, ten bo/chi nhanh hoac vai tro.
 - Co the tao khong gioi han bo tai khoan/chi nhanh, sua ID/mat khau va xoa bo tai khoan khac.
@@ -106,7 +113,7 @@ Neu dau trang hien `Dong bo: Luu tren may nay`, backend/database chua ket noi ne
 - Nut `In bill` se luu hoa don vao he thong truoc roi moi in, khong con in hoa don nhap.
 - Sau khi da in/luu, `Xoa dich vu` chi xoa bill dang soan moi, khong xoa duoc hoa don da luu.
 - Tung bill co ma xac thuc va chuoi khoa hoa don. Man hinh Live se canh bao neu chuoi khoa bi dut hoac core bill bi can thiep.
-- Bill in ra co tem xac thuc va ma dang `PT-xxxxxx-xxxxxx`; Excel cung co cot ma xac thuc va khoa bill.
+- Bill in ra co ma xac thuc dang `PT-xxxxxx-xxxxxx`; Excel cung co cot ma xac thuc va khoa bill.
 - Thu Ngan muon huy bill chi nhap ly do; khong can va khong duoc nhap ID/mat khau Quan Li.
 - Quan Li xem duoc `Nhat ky chong da bill` trong tab `Dau ca / Ket ca`.
 - Nhat ky ghi lai luu bill, huy bill, mo ca, ket ca va khoi phuc du lieu.
@@ -145,5 +152,7 @@ Neu dau trang hien `Dong bo: Luu tren may nay`, backend/database chua ket noi ne
 
 - Password trong Postgres duoc bam scrypt; API khong tra password ve trinh duyet va man hinh Tai khoan khong hien password.
 - Dang nhap online dung phien HttpOnly ky so; dong bo bill khong gui lai mat khau.
-- Co gioi han dang nhap sai, Content Security Policy, cac security header trinh duyet va kiem soat quyen tren server.
+- Tai khoan goc lay tu bien moi truong rieng tu cua Render, khong hard-code trong GitHub.
+- Co gioi han dang nhap sai, gioi han request API, gioi han request ghi du lieu, khoa tam IP spam, Content Security Policy, cac security header trinh duyet va kiem soat quyen tren server.
+- Neu bi DDoS lon, nen dat domain qua Cloudflare de co lop loc traffic phia truoc Render. Lop trong app giup chan spam/API abuse, con DDoS mang lon can firewall/CDN phia truoc.
 - Ban mo truc tiep/offline van huu ich de du phong, nhung khong the an toan bang Render Web Service + Postgres vi khong co server de xac thuc va chong sua du lieu.

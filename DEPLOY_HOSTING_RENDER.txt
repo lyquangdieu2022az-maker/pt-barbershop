@@ -15,8 +15,13 @@ Luu y quan trong:
 - Ban Pro co Live Command Center, ma xac thuc bill, chuoi khoa hoa don va nhan dien khach quen theo so dien thoai.
 
 Tai khoan dang nhap trong web:
-- Admin: ID 9939 / mat khau 040426
-- Thu Ngan: ID 3122 / mat khau 152004
+- Khong ghi ID/mat khau that trong GitHub/README.
+- Ban Render lay tai khoan goc tu Environment Variables rieng tu:
+  PT_ADMIN_ID
+  PT_ADMIN_PASSWORD
+  PT_CASHIER_ID
+  PT_CASHIER_PASSWORD
+- Dat 4 bien nay trong Render Environment truoc khi giao khach.
 
 Cach dua len Render dung cach:
 1. Tao tai khoan hoac dang nhap Render: https://dashboard.render.com/
@@ -28,6 +33,7 @@ Cach dua len Render dung cach:
    - Web Service: pt-barbershop-pos
    - Postgres database: pt-barbershop-db
 7. Bam Apply de deploy.
+8. Vao Environment cua Web Service va kiem tra 4 bien PT_ADMIN_ID, PT_ADMIN_PASSWORD, PT_CASHIER_ID, PT_CASHIER_PASSWORD da co gia tri rieng tu.
 
 Cau hinh da chuan bi san:
 - Service name: pt-barbershop-pos
@@ -44,6 +50,11 @@ Ten mien:
 - Neu muon ten mien rieng dep nhu ptbarbershop.com hoac ptbarbershop.vn thi thuong phai mua ten mien.
 - Render mien phi phan gan custom domain va SSL/HTTPS, nhung phi mua ten mien la cua nha cung cap ten mien.
 - Co the dung tam link onrender.com de gui khach xem va cai PWA tren iPhone/Android.
+
+Bao mat / chong spam:
+- Server co rate limit cho toan trang, API, dang nhap va thao tac ghi du lieu.
+- Neu spam qua gioi han nhieu lan, IP bi khoa tam.
+- Lop nay giup chan spam/API abuse. Neu bi DDoS lon, nen dung them Cloudflare/Firewall phia truoc domain.
 
 Neu ban deploy bang Static Site hoac Netlify:
 - Web van mo duoc.

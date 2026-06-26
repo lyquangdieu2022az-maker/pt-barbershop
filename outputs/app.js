@@ -7,25 +7,9 @@ const ACCOUNT_SYNC_INTERVAL_MS = 3500;
 const API_BASE_URL = String(window.PT_API_BASE_URL || "").replace(/\/+$/, "");
 const DEFAULT_WORKSPACE_ID = "pt-main";
 
-const USERS = [
-  { id: "9939", password: "040426", role: "admin", name: "Admin" },
-  { id: "3122", password: "152004", role: "cashier", name: "Thu Ngân" }
-];
-
 const defaultAccountState = {
-  groups: [
-    {
-      workspaceId: DEFAULT_WORKSPACE_ID,
-      workspaceName: "PT Barbershop",
-      managerId: "9939",
-      cashierId: "3122",
-      createdAt: ""
-    }
-  ],
-  users: [
-    { id: "9939", password: "040426", role: "admin", name: "Admin", workspaceId: DEFAULT_WORKSPACE_ID, workspaceName: "PT Barbershop" },
-    { id: "3122", password: "152004", role: "cashier", name: "Thu Ngan", workspaceId: DEFAULT_WORKSPACE_ID, workspaceName: "PT Barbershop" }
-  ]
+  groups: [],
+  users: []
 };
 
 const categoryNames = {
@@ -126,8 +110,56 @@ function canUseLocalLoginFallback() {
   return isFileOfflineMode() || window.navigator.onLine === false;
 }
 
+function isValidAccountId(value) {
+  return /^[A-Za-z0-9_-]{4,32}$/.test(String(value || ""));
+}
+
+function isValidAccountPassword(value) {
+  const text = String(value || "");
+  return text.length >= 6 && text.length <= 128;
+}
+
+function randomCredential(length = 10) {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
+}
+
+function hasLocalAccounts() {
+  return Array.isArray(accountState?.users) && accountState.users.length > 0;
+}
+
+function canBootstrapOfflineAccount() {
+  return isFileOfflineMode() && !hasLocalAccounts();
+}
+
+function bootstrapOfflineAdmin(id, password) {
+  if (!canBootstrapOfflineAccount() || !isValidAccountId(id) || !isValidAccountPassword(password)) return null;
+  const workspaceName = "PT Barbershop";
+  const group = {
+    workspaceId: DEFAULT_WORKSPACE_ID,
+    workspaceName,
+    managerId: String(id),
+    cashierId: "",
+    createdAt: new Date().toISOString()
+  };
+  const user = {
+    id: String(id),
+    password: String(password),
+    role: "admin",
+    name: "Admin",
+    workspaceId: DEFAULT_WORKSPACE_ID,
+    workspaceName
+  };
+  accountState = normalizeAccountState({ groups: [group], users: [user] });
+  saveAccountState();
+  return user;
+}
+
 function accountSyncMessage() {
   if (accountSyncOnline) return `${accountSyncStatus} - mọi máy sẽ thấy cùng danh sách ID`;
+  if (canBootstrapOfflineAccount()) return "Bản offline lần đầu: nhập ID/mật khẩu mới để tạo Admin trên máy này";
   if (isFileOfflineMode()) return "Bản offline dự phòng - tài khoản chỉ nằm trên máy này";
   return `${accountSyncStatus} - kiểm tra Render/Postgres trước khi giao khách`;
 }
@@ -300,7 +332,7 @@ function normalizeAccountState(nextAccountState) {
     users: Array.isArray(nextAccountState?.users) ? nextAccountState.users : []
   };
   const usersById = new Map();
-  [...defaultAccountState.users, ...merged.users].forEach((user) => {
+  merged.users.forEach((user) => {
     if (!user?.id) return;
     const role = ["admin", "manager", "cashier"].includes(user.role) ? user.role : "cashier";
     usersById.set(String(user.id), {
@@ -312,15 +344,8 @@ function normalizeAccountState(nextAccountState) {
       workspaceName: user.workspaceName || "PT Barbershop"
     });
   });
-  const rootAdmin = usersById.get("9939");
-  if (rootAdmin && rootAdmin.workspaceId === DEFAULT_WORKSPACE_ID) {
-    rootAdmin.role = "admin";
-    rootAdmin.name = "Admin";
-    rootAdmin.password = rootAdmin.password || "040426";
-  }
-
   const groupsById = new Map();
-  [...defaultAccountState.groups, ...merged.groups].forEach((group) => {
+  merged.groups.forEach((group) => {
     if (!group?.workspaceId) return;
     const users = [...usersById.values()].filter((user) => user.workspaceId === group.workspaceId);
     groupsById.set(String(group.workspaceId), {
@@ -2216,8 +2241,8 @@ function nextAccountCredentials() {
 
   while (true) {
     const suffix = String(serial).padStart(2, "0");
-    const managerId = `9939${suffix}`;
-    const cashierId = `3122${suffix}`;
+    const managerId = `QLPT${suffix}`;
+    const cashierId = `TNPT${suffix}`;
     if (!accountIdExists(managerId, exceptWorkspaceId) && !accountIdExists(cashierId, exceptWorkspaceId)) {
       return { suffix, managerId, cashierId };
     }
@@ -2233,9 +2258,9 @@ function generateAccountCredentials() {
   const next = nextAccountCredentials();
   $("#accountWorkspaceName").value = `Chi nhánh ${next.suffix}`;
   $("#accountManagerId").value = next.managerId;
-  $("#accountManagerPassword").value = `040426${next.suffix}`;
+  $("#accountManagerPassword").value = randomCredential(12);
   $("#accountCashierId").value = next.cashierId;
-  $("#accountCashierPassword").value = `152004${next.suffix}`;
+  $("#accountCashierPassword").value = randomCredential(12);
   $("#accountStatus").textContent = `Đã tạo sẵn ID cho Chi nhánh ${next.suffix}. Bấm Tạo bộ tài khoản để lưu.`;
   $("#accountManagerId").focus();
   showToast("Đã tạo ID tự động");
@@ -2996,7 +3021,7 @@ async function createAccountGroup(event) {
     $("#accountStatus").textContent = "Hãy nhập đủ ID và mật khẩu cho Quản Lí / Thu Ngân.";
     return;
   }
-  if (!/^[A-Za-z0-9_-]{4,32}$/.test(managerId) || !/^[A-Za-z0-9_-]{4,32}$/.test(cashierId) || managerPassword.length < 6 || cashierPassword.length < 6) {
+  if (!isValidAccountId(managerId) || !isValidAccountId(cashierId) || !isValidAccountPassword(managerPassword) || !isValidAccountPassword(cashierPassword)) {
     $("#accountStatus").textContent = "ID cần 4-32 ký tự chữ/số; mật khẩu cần tối thiểu 6 ký tự.";
     return;
   }
@@ -3090,6 +3115,14 @@ $("#loginForm").addEventListener("submit", async (event) => {
     cloudError = error;
   }
   if (!user && (!cloudError || canUseLocalLoginFallback())) user = findLocalUser(id, password);
+  if (!user && canBootstrapOfflineAccount()) {
+    user = bootstrapOfflineAdmin(id, password);
+    if (!user) {
+      $("#loginError").textContent = "Lần đầu offline: nhập ID 4-32 ký tự và mật khẩu tối thiểu 6 ký tự để tạo Admin.";
+      return;
+    }
+    showToast("Đã tạo Admin offline trên máy này");
+  }
 
   if (user) {
     const session = publicUser(user);

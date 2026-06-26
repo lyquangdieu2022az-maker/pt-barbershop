@@ -13,12 +13,48 @@ const SESSION_DURATION_MS = 12 * 60 * 60 * 1000;
 const SESSION_SECRET = process.env.SESSION_SECRET || randomBytes(32).toString("hex");
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 8;
+const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS || 60 * 1000);
+const RATE_LIMIT_GLOBAL_MAX = Number(process.env.RATE_LIMIT_GLOBAL_MAX || 240);
+const RATE_LIMIT_API_MAX = Number(process.env.RATE_LIMIT_API_MAX || 90);
+const RATE_LIMIT_WRITE_MAX = Number(process.env.RATE_LIMIT_WRITE_MAX || 35);
+const RATE_LIMIT_LOGIN_MAX = Number(process.env.RATE_LIMIT_LOGIN_MAX || 20);
+const TEMP_BLOCK_MS = Number(process.env.TEMP_BLOCK_MS || 10 * 60 * 1000);
+const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT || "2mb";
 const loginAttempts = new Map();
+const rateBuckets = new Map();
+const abuseScores = new Map();
+const blockedClients = new Map();
 
-const defaultUsers = new Map([
-  ["9939", { password: "040426", role: "admin", name: "Admin", workspaceId: DEFAULT_WORKSPACE_ID, workspaceName: "PT Barbershop" }],
-  ["3122", { password: "152004", role: "cashier", name: "Thu Ngan", workspaceId: DEFAULT_WORKSPACE_ID, workspaceName: "PT Barbershop" }]
-]);
+function envText(name) {
+  return String(process.env[name] || "").trim();
+}
+
+const bootstrapConfig = {
+  adminId: envText("PT_ADMIN_ID"),
+  adminPassword: envText("PT_ADMIN_PASSWORD"),
+  cashierId: envText("PT_CASHIER_ID"),
+  cashierPassword: envText("PT_CASHIER_PASSWORD")
+};
+
+const defaultUsers = new Map();
+if (isValidAccountId(bootstrapConfig.adminId) && isValidPassword(bootstrapConfig.adminPassword)) {
+  defaultUsers.set(bootstrapConfig.adminId, {
+    password: bootstrapConfig.adminPassword,
+    role: "admin",
+    name: "Admin",
+    workspaceId: DEFAULT_WORKSPACE_ID,
+    workspaceName: "PT Barbershop"
+  });
+}
+if (isValidAccountId(bootstrapConfig.cashierId) && isValidPassword(bootstrapConfig.cashierPassword)) {
+  defaultUsers.set(bootstrapConfig.cashierId, {
+    password: bootstrapConfig.cashierPassword,
+    role: "cashier",
+    name: "Thu Ngan",
+    workspaceId: DEFAULT_WORKSPACE_ID,
+    workspaceName: "PT Barbershop"
+  });
+}
 
 const databaseUrl = process.env.DATABASE_URL;
 const pool = databaseUrl
@@ -30,9 +66,80 @@ const pool = databaseUrl
 
 let dbReady = false;
 
+function clientIp(req) {
+  return String(req.ip || req.socket?.remoteAddress || "unknown");
+}
+
+function cleanupRateState() {
+  const now = Date.now();
+  for (const [key, record] of rateBuckets.entries()) {
+    if (now - record.startedAt > RATE_LIMIT_WINDOW_MS * 3) rateBuckets.delete(key);
+  }
+  for (const [key, record] of abuseScores.entries()) {
+    if (now - record.startedAt > TEMP_BLOCK_MS) abuseScores.delete(key);
+  }
+  for (const [key, blockedUntil] of blockedClients.entries()) {
+    if (blockedUntil <= now) blockedClients.delete(key);
+  }
+}
+
+setInterval(cleanupRateState, 60 * 1000).unref?.();
+
+function markAbuse(ip) {
+  const now = Date.now();
+  const record = abuseScores.get(ip);
+  if (!record || now - record.startedAt > TEMP_BLOCK_MS) {
+    abuseScores.set(ip, { count: 1, startedAt: now });
+    return;
+  }
+  record.count += 1;
+  if (record.count >= 6) {
+    blockedClients.set(ip, now + TEMP_BLOCK_MS);
+    abuseScores.delete(ip);
+  }
+}
+
+function rateLimit(scope, max, windowMs = RATE_LIMIT_WINDOW_MS) {
+  return (req, res, next) => {
+    const ip = clientIp(req);
+    const blockedUntil = blockedClients.get(ip);
+    if (blockedUntil && blockedUntil > Date.now()) {
+      res.set("Retry-After", String(Math.ceil((blockedUntil - Date.now()) / 1000)));
+      res.status(429).json({ error: "Too many requests. Try again later." });
+      return;
+    }
+    const key = `${scope}:${ip}`;
+    const now = Date.now();
+    const record = rateBuckets.get(key);
+    if (!record || now - record.startedAt > windowMs) {
+      rateBuckets.set(key, { count: 1, startedAt: now });
+      next();
+      return;
+    }
+    record.count += 1;
+    const remaining = Math.max(0, max - record.count);
+    res.set("X-RateLimit-Limit", String(max));
+    res.set("X-RateLimit-Remaining", String(remaining));
+    if (record.count > max) {
+      markAbuse(ip);
+      res.set("Retry-After", String(Math.ceil((windowMs - (now - record.startedAt)) / 1000)));
+      res.status(429).json({ error: "Too many requests. Try again later." });
+      return;
+    }
+    next();
+  };
+}
+
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
-app.use(express.json({ limit: "5mb" }));
+app.use((req, res, next) => {
+  req.setTimeout(15 * 1000);
+  res.setTimeout(15 * 1000);
+  next();
+});
+app.use(rateLimit("global", RATE_LIMIT_GLOBAL_MAX));
+app.use("/api/", rateLimit("api", RATE_LIMIT_API_MAX));
+app.use(express.json({ limit: JSON_BODY_LIMIT }));
 
 app.use((req, res, next) => {
   res.set("X-Content-Type-Options", "nosniff");
@@ -454,24 +561,33 @@ async function ensureDb() {
       updated_at timestamptz NOT NULL DEFAULT now()
     )
   `);
-  await pool.query(
-    `
-      INSERT INTO account_groups (workspace_id, workspace_name, manager_id, cashier_id, created_by)
-      VALUES ($1, 'PT Barbershop', '9939', '3122', 'system')
-      ON CONFLICT (workspace_id) DO NOTHING
-    `,
-    [DEFAULT_WORKSPACE_ID]
-  );
-  for (const [id, user] of defaultUsers.entries()) {
+  if (defaultUsers.size >= 2 && defaultUsers.has(bootstrapConfig.adminId) && defaultUsers.has(bootstrapConfig.cashierId)) {
     await pool.query(
       `
-        INSERT INTO app_users (id, password, password_hash, role, name, workspace_id, workspace_name)
-        VALUES ($1, '', $2, $3, $4, $5, $6)
-        ON CONFLICT (id)
-        DO NOTHING
+        INSERT INTO account_groups (workspace_id, workspace_name, manager_id, cashier_id, created_by)
+        VALUES ($1, 'PT Barbershop', $2, $3, 'system')
+        ON CONFLICT (workspace_id)
+        DO UPDATE SET manager_id = EXCLUDED.manager_id, cashier_id = EXCLUDED.cashier_id
       `,
-      [id, passwordHash(user.password), user.role, user.name, user.workspaceId, user.workspaceName]
+      [DEFAULT_WORKSPACE_ID, bootstrapConfig.adminId, bootstrapConfig.cashierId]
     );
+    for (const [id, user] of defaultUsers.entries()) {
+      await pool.query(
+        `
+          INSERT INTO app_users (id, password, password_hash, role, name, workspace_id, workspace_name)
+          VALUES ($1, '', $2, $3, $4, $5, $6)
+          ON CONFLICT (id)
+          DO UPDATE SET
+            password = '',
+            password_hash = EXCLUDED.password_hash,
+            role = EXCLUDED.role,
+            name = EXCLUDED.name,
+            workspace_id = EXCLUDED.workspace_id,
+            workspace_name = EXCLUDED.workspace_name
+        `,
+        [id, passwordHash(user.password), user.role, user.name, user.workspaceId, user.workspaceName]
+      );
+    }
   }
   const legacyTable = await pool.query("SELECT to_regclass('public.app_state') AS table_name");
   if (legacyTable.rows[0]?.table_name) {
@@ -493,7 +609,7 @@ app.get("/health", (req, res) => {
   res.json({ ok: true });
 });
 
-app.post("/api/login", async (req, res, next) => {
+app.post("/api/login", rateLimit("login", RATE_LIMIT_LOGIN_MAX), async (req, res, next) => {
   try {
     const id = String(req.body?.id || "");
     const password = String(req.body?.password || "");
@@ -559,7 +675,7 @@ app.get("/api/session", requireAuth, (req, res) => {
   res.json({ user: publicUser(req.user) });
 });
 
-app.post("/api/logout", (req, res) => {
+app.post("/api/logout", rateLimit("write", RATE_LIMIT_WRITE_MAX), (req, res) => {
   clearSession(req, res);
   res.status(204).end();
 });
@@ -601,7 +717,7 @@ app.get("/api/account-groups", requireAuth, async (req, res, next) => {
   }
 });
 
-app.post("/api/account-groups", requireAuth, async (req, res, next) => {
+app.post("/api/account-groups", rateLimit("write", RATE_LIMIT_WRITE_MAX), requireAuth, async (req, res, next) => {
   try {
     if (req.user.role !== "admin") {
       res.status(403).json({ error: "Only admin can create accounts" });
@@ -651,7 +767,7 @@ app.post("/api/account-groups", requireAuth, async (req, res, next) => {
   }
 });
 
-app.put("/api/account-groups/:workspaceId", requireAuth, async (req, res, next) => {
+app.put("/api/account-groups/:workspaceId", rateLimit("write", RATE_LIMIT_WRITE_MAX), requireAuth, async (req, res, next) => {
   try {
     if (req.user.role !== "admin") {
       res.status(403).json({ error: "Only admin can update accounts" });
@@ -720,7 +836,7 @@ app.put("/api/account-groups/:workspaceId", requireAuth, async (req, res, next) 
   }
 });
 
-app.delete("/api/account-groups/:workspaceId", requireAuth, async (req, res, next) => {
+app.delete("/api/account-groups/:workspaceId", rateLimit("write", RATE_LIMIT_WRITE_MAX), requireAuth, async (req, res, next) => {
   try {
     if (req.user.role !== "admin") {
       res.status(403).json({ error: "Only admin can delete accounts" });
@@ -770,7 +886,7 @@ app.get("/api/state", requireAuth, async (req, res, next) => {
   }
 });
 
-app.post("/api/state", requireAuth, async (req, res, next) => {
+app.post("/api/state", rateLimit("write", RATE_LIMIT_WRITE_MAX), requireAuth, async (req, res, next) => {
   try {
     await ensureDb();
     const data = req.body?.data;
@@ -801,9 +917,14 @@ app.post("/api/state", requireAuth, async (req, res, next) => {
 });
 
 app.use(express.static(outputsDir, {
+  dotfiles: "ignore",
+  etag: true,
+  maxAge: "1h",
   setHeaders(res, filePath) {
     if (filePath.endsWith("index.html") || filePath.endsWith("sw.js")) {
       res.setHeader("Cache-Control", "no-store");
+    } else {
+      res.setHeader("Cache-Control", "public, max-age=3600");
     }
   }
 }));

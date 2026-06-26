@@ -1,8 +1,10 @@
 HUONG DAN SU DUNG PT BARBERSHOP POS
 
 1. Dang nhap
-- Admin: ID 9939 / mat khau 040426
-- Thu Ngan: ID 3122 / mat khau 152004
+- Khong ghi ID/mat khau that trong GitHub.
+- Ban Render dung ID/mat khau duoc dat rieng trong Environment Variables:
+  PT_ADMIN_ID, PT_ADMIN_PASSWORD, PT_CASHIER_ID, PT_CASHIER_PASSWORD.
+- Ban offline mo truc tiep file index.html lan dau se cho tao Admin local bang ID/mat khau tu dat tren may do.
 
 2. Mo tren may tinh khong can Internet
 - Giai nen file ZIP.
@@ -50,7 +52,7 @@ HUONG DAN SU DUNG PT BARBERSHOP POS
 - Quan Li vao Dau ca / Ket ca de xem Nhat ky chong da bill.
 
 8. Admin quan ly tai khoan
-- Dang nhap Admin bang ID 9939 / mat khau 040426.
+- Dang nhap Admin bang ID/mat khau da dat rieng trong Render Environment hoac Admin local da tao lan dau neu dung offline.
 - Vao tab Tai khoan.
 - Co the tim theo ID, ten bo/chi nhanh hoac vai tro.
 - Co the tao khong gioi han bo tai khoan/chi nhanh, sua ID/mat khau va xoa bo tai khoan khac.
@@ -124,7 +126,8 @@ HUONG DAN SU DUNG PT BARBERSHOP POS
 16. Bao mat ban Render
 - Mat khau trong database duoc chuyen sang dang bam scrypt; web khong hien mat khau tren danh sach tai khoan.
 - Dang nhap online dung phien HttpOnly co ky so. Mat khau khong con gui lai moi lan dong bo bill.
-- Server co gioi han 8 lan dang nhap sai trong 15 phut tren moi ID/may, khoa bill da luu, chan sua gia/nhan vien tu tai khoan Thu Ngan va gui cac header bao mat trinh duyet.
+- Server co gioi han dang nhap sai, gioi han request API, gioi han request ghi du lieu, khoa tam IP spam, khoa bill da luu, chan sua gia/nhan vien tu tai khoan Thu Ngan va gui cac header bao mat trinh duyet.
+- Neu bi DDoS lon, nen dung them Cloudflare/firewall phia truoc domain. Lop trong app giup chan spam/API abuse, khong thay the duoc ha tang chong DDoS quy mo lon.
 - Ban ZIP mo truc tiep khi khong co server chi la che do du phong, khong the co muc bao mat bang ban Render + Postgres. Muon dung nhieu may va chong can thiep, hay deploy dung Blueprint Render.
 
 17. Gui cho nguoi khac
