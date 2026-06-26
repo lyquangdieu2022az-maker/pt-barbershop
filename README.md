@@ -55,7 +55,7 @@ Neu dau trang hien `Dong bo: Luu tren may nay`, backend/database chua ket noi ne
 
 ## Admin quan ly tai khoan
 
-- Dang nhap Admin bang `9939` / `040426`.
+- 
 - Vao tab `Tai khoan`.
 - Co the tim theo ID, ten bo/chi nhanh hoac vai tro.
 - Co the tao khong gioi han bo tai khoan/chi nhanh, sua ID/mat khau va xoa bo tai khoan khac.
