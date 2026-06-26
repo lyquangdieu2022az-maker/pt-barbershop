@@ -203,7 +203,7 @@ function setReceiptPrintStyle() {
     style.id = "receiptPrintSizeStyle";
     document.head.appendChild(style);
   }
-  style.textContent = `@media print { @page { size: ${width} auto; margin: 2mm; } .print-area, .receipt { width: ${width}; max-width: ${width}; } }`;
+  style.textContent = `@media print { @page { size: ${width} auto; margin: 0; } html, body { margin: 0 !important; padding: 0 !important; } .print-area, .receipt { width: ${width}; max-width: ${width}; } }`;
 }
 
 function receiptShopHeaderHtml() {
@@ -268,15 +268,6 @@ function billHashFor(bill, previousHash = bill?.previousBillHash || "") {
 function billVerifyCode(bill) {
   const hash = bill.billHash || billHashFor(bill, bill.previousBillHash || "");
   return `PT-${String(bill.invoiceNo || "HD000000").replace(/\D/g, "").slice(-6)}-${hash.slice(0, 6)}`;
-}
-
-function receiptSealHtml(code = "") {
-  const seed = simpleHash(code || "PT");
-  const bits = Array.from({ length: 49 }, (_, index) => {
-    const char = seed.charCodeAt(index % seed.length);
-    return ((char + index * 17) % 5) < 2 ? " on" : "";
-  });
-  return `<div class="receipt-seal" aria-label="Tem xác thực">${bits.map((bit) => `<i class="${bit.trim()}"></i>`).join("")}</div>`;
 }
 
 function emptyPaymentTotals() {
@@ -2806,8 +2797,7 @@ function printBill(bill) {
       ${bill.phone ? `<div class="receipt-row"><span>SĐT</span><strong>${escapeHtml(bill.phone)}</strong></div>` : ""}
       <div class="receipt-row"><span>Nhân viên</span><strong>${escapeHtml(bill.staffName)}</strong></div>
       <div class="receipt-row"><span>Thanh toán</span><strong>${paymentLabel(bill.paymentMethod)}</strong></div>
-      <div class="receipt-row"><span>Mã xác thực</span><strong>${escapeHtml(bill.verifyCode || billVerifyCode(bill))}</strong></div>
-      ${receiptSealHtml(bill.verifyCode || billVerifyCode(bill))}
+      <div class="receipt-row receipt-code"><span>Mã</span><strong>${escapeHtml(bill.verifyCode || billVerifyCode(bill))}</strong></div>
       ${bill.status === "canceled" ? `<div class="receipt-status">Đơn đã hủy</div>` : ""}
       ${bill.status === "canceled" && isManager() ? `<div class="receipt-row"><span>Lý do hủy</span><strong>${escapeHtml(bill.cancelReason || "Không ghi")}</strong></div>` : ""}
       ${bill.status === "canceled" && isManager() ? `<div class="receipt-row"><span>QL duyệt</span><strong>${escapeHtml(bill.approvedBy || "-")}</strong></div>` : ""}
