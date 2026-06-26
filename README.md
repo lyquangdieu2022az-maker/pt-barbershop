@@ -2,11 +2,6 @@
 
 Bo web order/barbershop POS cho PT Barbershop.
 
-## Tai khoan
-
-- Admin: `9939` / `040426`
-- Thu Ngan: `3122` / `152004`
-
 ## Deploy len Render co dong bo online
 
 Ban dong bo online can Render Web Service + Postgres. Nen dung Blueprint.
