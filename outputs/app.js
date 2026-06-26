@@ -67,6 +67,12 @@ const defaultState = {
     { id: crypto.randomUUID(), category: "extra", name: "Lột mụn", price: 90000, commission: 25 }
   ],
   selectedServiceIds: [],
+  shopInfo: {
+    receiptName: "PT Barbershop",
+    address: "",
+    phone: "",
+    receiptWidth: "58mm"
+  },
   bills: [],
   cancelRequests: [],
   shift: {
@@ -169,6 +175,44 @@ function safePaymentMethod(method) {
 
 function paymentLabel(method) {
   return paymentNames[safePaymentMethod(method)];
+}
+
+function normalizeReceiptWidth(width) {
+  return ["58mm", "80mm"].includes(String(width || "")) ? String(width) : "58mm";
+}
+
+function normalizeShopInfo(info = {}) {
+  return {
+    receiptName: String(info.receiptName || "PT Barbershop").trim() || "PT Barbershop",
+    address: String(info.address || "").trim(),
+    phone: String(info.phone || "").trim(),
+    receiptWidth: normalizeReceiptWidth(info.receiptWidth)
+  };
+}
+
+function currentShopInfo() {
+  return normalizeShopInfo(state.shopInfo || {});
+}
+
+function setReceiptPrintStyle() {
+  const width = currentShopInfo().receiptWidth;
+  document.documentElement.style.setProperty("--receipt-width", width);
+  let style = document.getElementById("receiptPrintSizeStyle");
+  if (!style) {
+    style = document.createElement("style");
+    style.id = "receiptPrintSizeStyle";
+    document.head.appendChild(style);
+  }
+  style.textContent = `@media print { @page { size: ${width} auto; margin: 2mm; } .print-area, .receipt { width: ${width}; max-width: ${width}; } }`;
+}
+
+function receiptShopHeaderHtml() {
+  const info = currentShopInfo();
+  return `
+    <h1>${escapeHtml(info.receiptName)}</h1>
+    ${info.address ? `<p class="receipt-address">${escapeHtml(info.address)}</p>` : ""}
+    ${info.phone ? `<p class="receipt-address">ĐT: ${escapeHtml(info.phone)}</p>` : ""}
+  `;
 }
 
 function stableDataString(value) {
@@ -384,6 +428,7 @@ function normalizeState(nextState) {
   nextState.staff = Array.isArray(nextState.staff) ? nextState.staff : structuredClone(defaultState.staff);
   nextState.services = Array.isArray(nextState.services) ? nextState.services : structuredClone(defaultState.services);
   nextState.selectedServiceIds = Array.isArray(nextState.selectedServiceIds) ? nextState.selectedServiceIds : [];
+  nextState.shopInfo = normalizeShopInfo(nextState.shopInfo);
   nextState.cancelRequests = Array.isArray(nextState.cancelRequests) ? nextState.cancelRequests.map((request) => ({
     id: request.id || crypto.randomUUID(),
     billId: request.billId || "",
@@ -524,6 +569,7 @@ function saveState() {
 function businessState() {
   return {
     invoiceCounter: state.invoiceCounter,
+    shopInfo: state.shopInfo,
     staff: state.staff,
     services: state.services,
     bills: state.bills,
@@ -543,6 +589,7 @@ function hasBusinessData(data = businessState()) {
     (Array.isArray(data.securityLog) && data.securityLog.length) ||
     data.shift?.isOpen ||
     Number(data.shift?.openingCash || 0) ||
+    stableDataString(normalizeShopInfo(data.shopInfo)) !== stableDataString(defaultState.shopInfo) ||
     (Array.isArray(data.staff) && data.staff.length !== defaultState.staff.length) ||
     (Array.isArray(data.services) && data.services.length !== defaultState.services.length)
   );
@@ -824,6 +871,7 @@ async function startCloudSync() {
 function dataForBackup() {
   return {
     invoiceCounter: state.invoiceCounter,
+    shopInfo: state.shopInfo,
     staff: state.staff,
     services: state.services,
     bills: state.bills,
@@ -2415,6 +2463,16 @@ function renderShift() {
   `;
 }
 
+function renderShopInfoSettings() {
+  const form = $("#shopInfoForm");
+  if (!form) return;
+  const info = currentShopInfo();
+  $("#shopReceiptName").value = info.receiptName;
+  $("#shopReceiptAddress").value = info.address;
+  $("#shopReceiptPhone").value = info.phone;
+  $("#receiptPaperWidth").value = info.receiptWidth;
+}
+
 function renderShiftLogs() {
   const body = $("#shiftLogBody");
   if (!body) return;
@@ -2493,6 +2551,7 @@ function renderAll() {
   renderBillHistory();
   renderCancelApprovalRequests();
   renderShift();
+  renderShopInfoSettings();
   renderShiftLogs();
   renderSecurityLog();
   renderBackupInfo();
@@ -2735,9 +2794,10 @@ function printSavedBill(billId) {
 }
 
 function printBill(bill) {
+  setReceiptPrintStyle();
   $("#printArea").innerHTML = `
     <div class="receipt">
-      <h1>PT Barbershop</h1>
+      ${receiptShopHeaderHtml()}
       <p>Hóa đơn dịch vụ</p>
       <div class="receipt-row"><span>Số HĐ</span><strong>${escapeHtml(bill.invoiceNo || "-")}</strong></div>
       <div class="receipt-row"><span>STT chờ</span><strong>${bill.queueNo ? `#${escapeHtml(bill.queueNo)}` : "-"}</strong></div>
@@ -2766,6 +2826,7 @@ function printBill(bill) {
 }
 
 function printShiftReport(report) {
+  setReceiptPrintStyle();
   const staffRows = Array.isArray(report.staffCommissions) && report.staffCommissions.length
     ? report.staffCommissions.map((row) => `
       <div class="receipt-row">
@@ -2783,7 +2844,7 @@ function printShiftReport(report) {
 
   $("#printArea").innerHTML = `
     <div class="receipt">
-      <h1>PT Barbershop</h1>
+      ${receiptShopHeaderHtml()}
       <p>Phiếu kết ca</p>
       <div class="receipt-row"><span>Người trực</span><strong>${escapeHtml(report.cashierName || "-")}</strong></div>
       <div class="receipt-row"><span>Mở ca</span><strong>${timeText(report.openedAt) || "-"}</strong></div>
@@ -2906,6 +2967,25 @@ function resetShiftAfterPrinting() {
   saveState();
   renderAll();
   showToast("Đã in kết ca. Màn hình đã sẵn sàng cho ca mới.");
+}
+
+function saveShopInfoSettings(event) {
+  event.preventDefault();
+  if (!isManager()) {
+    alert("Chỉ Quản Lý mới được sửa thông tin in bill.");
+    return;
+  }
+  state.shopInfo = normalizeShopInfo({
+    receiptName: $("#shopReceiptName").value,
+    address: $("#shopReceiptAddress").value,
+    phone: $("#shopReceiptPhone").value,
+    receiptWidth: $("#receiptPaperWidth").value
+  });
+  logSecurity("Sửa thông tin in bill", `Khổ giấy ${state.shopInfo.receiptWidth}, địa chỉ: ${state.shopInfo.address || "chưa nhập"}`);
+  saveState();
+  renderAll();
+  $("#shopInfoStatus").textContent = "Đã lưu thông tin in bill cho chi nhánh này.";
+  showToast("Đã lưu địa chỉ và khổ giấy in bill");
 }
 
 async function createAccountGroup(event) {
@@ -3250,6 +3330,8 @@ $("#closeShiftForm").addEventListener("submit", (event) => {
   event.preventDefault();
   closeShift();
 });
+
+$("#shopInfoForm").addEventListener("submit", saveShopInfoSettings);
 
 $("#printShiftBtn").addEventListener("click", () => {
   if (state.shift.isOpen) {

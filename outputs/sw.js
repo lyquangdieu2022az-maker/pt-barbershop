@@ -1,4 +1,4 @@
-const CACHE_NAME = "barbershop-order-offline-v40";
+const CACHE_NAME = "barbershop-order-offline-v41";
 const APP_FILES = [
   "./",
   "./index.html",

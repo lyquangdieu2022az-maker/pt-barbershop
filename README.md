@@ -97,6 +97,8 @@ Neu dau trang hien `Dong bo: Luu tren may nay`, backend/database chua ket noi ne
 - Bam nut `In bill` se luu hoa don vao he thong truoc, tao So HD/STT, tinh doanh thu, tinh tien chia tho va in bill day du.
 - Tho chi lam theo bill da duoc in tu nut nay.
 - Sau khi da in bill, hoa don nam trong lich su bill va khong the xoa.
+- Quan Ly co the cai rieng dia chi/hotline/ten hien thi va kho giay in bill cho tung chi nhanh trong tab `Dau ca / Ket ca`.
+- Ho tro kho giay may in nhiet `58mm` va `80mm`; khi in app tu set khung bill theo kho giay da chon.
 
 ## Chong da bill
 

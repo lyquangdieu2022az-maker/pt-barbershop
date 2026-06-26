@@ -347,6 +347,10 @@ function requireCashierSafeUpdate(previous, next, req) {
     throw securityError("Bảo mật: Thu Ngân không được sửa bảng giá.");
   }
 
+  if (previous.shopInfo && stableStringify(previous.shopInfo) !== stableStringify(next.shopInfo || {})) {
+    throw securityError("Bao mat: Thu Ngan khong duoc sua thong tin in bill.");
+  }
+
   requireCashierCancelRequestUpdate(previous, next, req);
 
   const nextBills = new Map((next.bills || []).map((bill) => [bill.id, bill]));

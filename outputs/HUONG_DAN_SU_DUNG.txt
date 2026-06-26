@@ -91,6 +91,9 @@ HUONG DAN SU DUNG PT BARBERSHOP POS
 - Bam nut In bill se luu hoa don vao he thong truoc, tao So HD/STT, tinh doanh thu, tinh tien chia tho va in bill day du.
 - Tho chi lam theo bill da duoc in tu nut nay.
 - Sau khi da in bill, hoa don nam trong lich su bill va khong the xoa.
+- Dia chi/hotline in tren bill duoc cai rieng theo tung chi nhanh. Quan Ly vao Dau ca / Ket ca -> Thong tin chi nhanh tren hoa don de doi ten hien thi, dia chi, hotline.
+- Co the chon kho giay may in bill 58mm hoac 80mm. Neu may in bill nho thuong chon 58mm, may in lon chon 80mm.
+- Khi in, bill tu set kho giay theo cai dat de han che tran ngang va vua may in bill nhiet.
 
 13. Chong da bill
 - Bill da luu duoc khoa: khong co nut sua bill, khong co xoa bill.

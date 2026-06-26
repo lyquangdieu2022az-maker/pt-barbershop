@@ -356,6 +356,36 @@
           <section class="panel" data-manager-only>
             <div class="panel-head">
               <div>
+                <p class="eyebrow">In bill</p>
+                <h3>Thông tin chi nhánh trên hóa đơn</h3>
+              </div>
+              <span class="scope-badge">Lưu riêng theo chi nhánh</span>
+            </div>
+            <form id="shopInfoForm" class="stack-form">
+              <div class="field-grid">
+                <label>Tên hiển thị trên bill
+                  <input id="shopReceiptName" placeholder="PT Barbershop">
+                </label>
+                <label>Số điện thoại / hotline
+                  <input id="shopReceiptPhone" inputmode="tel" placeholder="VD: 0901234567">
+                </label>
+                <label>Địa chỉ chi nhánh
+                  <textarea id="shopReceiptAddress" rows="3" maxlength="180" placeholder="VD: 123 Nguyễn Trãi, Quận 1, TP.HCM"></textarea>
+                </label>
+                <label>Khổ giấy máy in bill
+                  <select id="receiptPaperWidth">
+                    <option value="58mm">58mm - máy bill nhỏ</option>
+                    <option value="80mm">80mm - máy bill lớn</option>
+                  </select>
+                </label>
+              </div>
+              <button type="submit" class="primary-button">Lưu thông tin in bill</button>
+              <p id="shopInfoStatus" class="backup-status">Địa chỉ và khổ giấy sẽ đi theo chi nhánh đang đăng nhập.</p>
+            </form>
+          </section>
+          <section class="panel" data-manager-only>
+            <div class="panel-head">
+              <div>
                 <p class="eyebrow">Quản lý ca</p>
                 <h3>Nhật ký ca hiện tại</h3>
               </div>
