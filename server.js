@@ -1323,7 +1323,11 @@ function setStaticCacheHeaders(res, filePath) {
 }
 
 app.get("/pos", (req, res) => {
-  res.redirect(302, "/pos/");
+  if (req.originalUrl.split("?")[0] === "/pos") {
+    res.redirect(302, "/pos/");
+    return;
+  }
+  res.sendFile(path.join(outputsDir, "index.html"));
 });
 
 app.use("/pos", express.static(outputsDir, {
