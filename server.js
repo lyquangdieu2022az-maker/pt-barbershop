@@ -7,6 +7,7 @@ const { Pool } = require("pg");
 const app = express();
 const port = process.env.PORT || 3000;
 const outputsDir = path.join(__dirname, "outputs");
+const publicDir = path.join(__dirname, "public-site");
 const DEFAULT_WORKSPACE_ID = "pt-main";
 const SESSION_COOKIE_NAME = "pt_barbershop_session";
 const SESSION_DURATION_MS = 12 * 60 * 60 * 1000;
@@ -351,6 +352,179 @@ function stableStringify(value) {
   return JSON.stringify(value);
 }
 
+function simpleHash(value) {
+  const text = String(value || "");
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).toUpperCase().padStart(8, "0");
+}
+
+function formatInvoiceNo(sequence) {
+  return "HD" + String(Math.max(0, Number(sequence || 0))).padStart(6, "0");
+}
+
+function safePaymentMethod(value) {
+  return ["cash", "transfer", "card", "other"].includes(String(value || "")) ? String(value) : "cash";
+}
+
+function normalizeBillItem(item = {}) {
+  return {
+    id: String(item.id || ""),
+    category: String(item.category || "extra"),
+    name: String(item.name || "Dich vu").trim() || "Dich vu",
+    price: Math.max(0, Number(item.price || 0)),
+    commission: Math.max(0, Math.min(100, Number(item.commission || 0)))
+  };
+}
+
+function billTotalsFromItems(items = []) {
+  return items.reduce((totals, item) => {
+    const price = Number(item.price || 0);
+    totals.total += price;
+    totals.commission += Math.round(price * Number(item.commission || 0) / 100);
+    return totals;
+  }, { total: 0, commission: 0 });
+}
+
+function billSecurityPayload(bill = {}, previousHash = "") {
+  return {
+    id: bill.id || "",
+    createdAt: bill.createdAt || "",
+    invoiceSequence: Number(bill.invoiceSequence || 0),
+    invoiceNo: bill.invoiceNo || "",
+    queueNo: Number(bill.queueNo || 0),
+    customer: bill.customer || "",
+    phone: bill.phone || "",
+    staffId: bill.staffId || "",
+    staffName: bill.staffName || "",
+    note: bill.note || "",
+    paymentMethod: safePaymentMethod(bill.paymentMethod),
+    shiftId: bill.shiftId || "",
+    createdBy: bill.createdBy || "",
+    items: Array.isArray(bill.items) ? bill.items.map((item) => ({
+      id: item.id || "",
+      category: item.category || "",
+      name: item.name || "",
+      price: Number(item.price || 0),
+      commission: Number(item.commission || 0)
+    })) : [],
+    total: Number(bill.total || 0),
+    commission: Number(bill.commission || 0),
+    previousHash: previousHash || ""
+  };
+}
+
+function billHashFor(bill, previousHash = bill?.previousBillHash || "") {
+  return simpleHash(stableStringify(billSecurityPayload(bill, previousHash)));
+}
+
+function billVerifyCode(bill) {
+  const hash = bill.billHash || billHashFor(bill, bill.previousBillHash || "");
+  return `PT-${String(bill.invoiceNo || "HD000000").replace(/\D/g, "").slice(-6)}-${hash.slice(0, 6)}`;
+}
+
+function sequenceFromInvoiceNo(invoiceNo) {
+  const match = String(invoiceNo || "").match(/(\d+)$/);
+  return match ? Number(match[1]) : 0;
+}
+
+function maxInvoiceSequence(data = {}) {
+  return Math.max(
+    Number(data.invoiceCounter || 0),
+    ...((data.bills || []).map((bill) => Number(bill.invoiceSequence || sequenceFromInvoiceNo(bill.invoiceNo) || 0)))
+  );
+}
+
+function mergeRecordsById(previousItems = [], nextItems = []) {
+  const records = new Map();
+  previousItems.forEach((item) => {
+    if (item?.id) records.set(String(item.id), item);
+  });
+  nextItems.forEach((item) => {
+    if (item?.id) records.set(String(item.id), item);
+  });
+  return [...records.values()];
+}
+
+function mergeWorkspaceState(previous, next) {
+  if (!previous) return next;
+  const merged = { ...previous, ...next };
+  merged.bills = mergeRecordsById(previous.bills || [], next.bills || [])
+    .sort((left, right) => Number(left.invoiceSequence || 0) - Number(right.invoiceSequence || 0));
+  merged.cancelRequests = mergeRecordsById(previous.cancelRequests || [], next.cancelRequests || []);
+  merged.shiftLogs = mergeRecordsById(previous.shiftLogs || [], next.shiftLogs || []);
+  merged.securityLog = mergeRecordsById(previous.securityLog || [], next.securityLog || [])
+    .sort((left, right) => new Date(right.createdAt || 0) - new Date(left.createdAt || 0))
+    .slice(0, 500);
+  merged.invoiceCounter = Math.max(maxInvoiceSequence(previous), maxInvoiceSequence(next), maxInvoiceSequence(merged));
+  if (previous.shift?.id && next.shift?.id && previous.shift.id === next.shift.id) {
+    merged.shift = {
+      ...previous.shift,
+      ...next.shift,
+      queueCounter: Math.max(Number(previous.shift.queueCounter || 0), Number(next.shift.queueCounter || 0))
+    };
+  }
+  return merged;
+}
+
+function appendSecurityLog(data, req, action, detail, bill = null) {
+  const entry = {
+    id: randomUUID(),
+    createdAt: new Date().toISOString(),
+    userId: req.user?.id || "",
+    userName: req.user?.name || "Server",
+    role: req.user?.role || "",
+    shiftId: data.shift?.id || bill?.shiftId || "",
+    action,
+    invoiceNo: bill?.invoiceNo || "",
+    detail
+  };
+  data.securityLog = [entry, ...mergeRecordsById(data.securityLog || [], [])].slice(0, 500);
+}
+
+function buildServerBill(draft, context) {
+  const items = Array.isArray(draft.items) ? draft.items.map(normalizeBillItem).filter((item) => item.name && item.price >= 0) : [];
+  if (!items.length) {
+    const error = new Error("Bill must contain at least one service");
+    error.statusCode = 400;
+    throw error;
+  }
+  const totals = billTotalsFromItems(items);
+  const bill = {
+    id: String(draft.id || randomUUID()),
+    createdAt: new Date().toISOString(),
+    invoiceSequence: context.invoiceSequence,
+    invoiceNo: formatInvoiceNo(context.invoiceSequence),
+    queueNo: context.queueNo,
+    customer: String(draft.customer || "Khach le").trim() || "Khach le",
+    phone: String(draft.phone || "").trim(),
+    staffId: String(draft.staffId || ""),
+    staffName: String(draft.staffName || "Nhan vien").trim() || "Nhan vien",
+    note: String(draft.note || "").trim(),
+    paymentMethod: safePaymentMethod(draft.paymentMethod),
+    shiftId: context.shiftId,
+    createdBy: context.createdBy,
+    createdById: context.createdById,
+    status: "paid",
+    canceledAt: "",
+    canceledBy: "",
+    cancelReason: "",
+    items,
+    total: totals.total,
+    commission: totals.commission,
+    previousBillHash: context.previousBillHash || "",
+    billHash: "",
+    verifyCode: "",
+    lockedByServer: true
+  };
+  bill.billHash = billHashFor(bill, bill.previousBillHash);
+  bill.verifyCode = billVerifyCode(bill);
+  return bill;
+}
+
 function securityError(message) {
   const error = new Error(message);
   error.statusCode = 403;
@@ -413,7 +587,7 @@ function requireCashierCancelRequestUpdate(previous, next, req) {
 
   for (const oldRequest of previous.cancelRequests || []) {
     const nextRequest = nextRequests.get(oldRequest.id);
-    if (!nextRequest) throw securityError("Cashier cannot delete a cancellation request.");
+    if (!nextRequest) continue;
     if (stableStringify(cancelRequestCore(oldRequest)) !== stableStringify(cancelRequestCore(nextRequest))) {
       throw securityError("Cashier cannot edit a cancellation request.");
     }
@@ -463,7 +637,7 @@ function requireCashierSafeUpdate(previous, next, req) {
   const nextBills = new Map((next.bills || []).map((bill) => [bill.id, bill]));
   for (const oldBill of previous.bills || []) {
     const newBill = nextBills.get(oldBill.id);
-    if (!newBill) throw securityError(`Bảo mật: Bill ${oldBill.invoiceNo || oldBill.id} không được xóa.`);
+    if (!newBill) continue;
     if (stableStringify(billCore(oldBill)) !== stableStringify(billCore(newBill))) {
       throw securityError(`Bảo mật: Bill ${oldBill.invoiceNo || oldBill.id} đã khóa, không được sửa.`);
     }
@@ -495,7 +669,7 @@ function requireCashierSafeUpdate(previous, next, req) {
   const nextShiftLogs = new Map((next.shiftLogs || []).map((shift) => [shift.id, shift]));
   for (const oldShift of previous.shiftLogs || []) {
     const newShift = nextShiftLogs.get(oldShift.id);
-    if (!newShift) throw securityError("Bảo mật: Lịch sử kết ca không được xóa.");
+    if (!newShift) continue;
     if (stableStringify(oldShift) !== stableStringify(newShift)) {
       throw securityError("Bảo mật: Lịch sử kết ca đã khóa, không được sửa.");
     }
@@ -504,13 +678,79 @@ function requireCashierSafeUpdate(previous, next, req) {
   const nextSecurityLogs = new Map((next.securityLog || []).map((entry) => [entry.id, entry]));
   for (const oldEntry of previous.securityLog || []) {
     const newEntry = nextSecurityLogs.get(oldEntry.id);
-    if (!newEntry) {
-      throw securityError("Bảo mật: Nhật ký bảo mật không được xóa.");
-    }
+    if (!newEntry) continue;
     if (stableStringify(oldEntry) !== stableStringify(newEntry)) {
       throw securityError("Bảo mật: Nhật ký bảo mật đã khóa, không được sửa.");
     }
   }
+}
+
+async function upsertBillsFromState(workspaceId, data = {}) {
+  const bills = Array.isArray(data.bills) ? data.bills : [];
+  for (const bill of bills) {
+    if (!bill?.id || !bill?.invoiceNo) continue;
+    const sequence = Number(bill.invoiceSequence || sequenceFromInvoiceNo(bill.invoiceNo) || 0);
+    const existing = await pool.query(
+      `
+        SELECT id FROM app_bills
+        WHERE workspace_id = $1 AND (id = $2 OR invoice_no = $3 OR invoice_sequence = $4)
+        LIMIT 1
+      `,
+      [workspaceId, bill.id, bill.invoiceNo, sequence]
+    );
+    if (existing.rows.length && existing.rows[0].id !== bill.id) continue;
+    await pool.query(
+      `
+        INSERT INTO app_bills (
+          id, workspace_id, invoice_sequence, invoice_no, queue_no, shift_id,
+          status, bill_hash, verify_code, data, created_at, updated_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, COALESCE($11::timestamptz, now()), now())
+        ON CONFLICT (id)
+        DO UPDATE SET
+          status = EXCLUDED.status,
+          bill_hash = EXCLUDED.bill_hash,
+          verify_code = EXCLUDED.verify_code,
+          data = EXCLUDED.data,
+          updated_at = now()
+      `,
+      [
+        bill.id,
+        workspaceId,
+        sequence,
+        bill.invoiceNo,
+        Number(bill.queueNo || 0),
+        bill.shiftId || "",
+        bill.status || "paid",
+        bill.billHash || "",
+        bill.verifyCode || "",
+        JSON.stringify(bill),
+        bill.createdAt || null
+      ]
+    );
+  }
+}
+
+async function hydrateStateFromBillTable(workspaceId, data = {}) {
+  const result = await pool.query(
+    "SELECT data FROM app_bills WHERE workspace_id = $1 ORDER BY invoice_sequence ASC",
+    [workspaceId]
+  );
+  if (!result.rows.length) return data;
+  const billRows = result.rows.map((row) => row.data).filter(Boolean);
+  const hydrated = {
+    ...data,
+    bills: mergeRecordsById(data.bills || [], billRows)
+      .sort((left, right) => Number(left.invoiceSequence || 0) - Number(right.invoiceSequence || 0))
+  };
+  hydrated.invoiceCounter = Math.max(maxInvoiceSequence(data), maxInvoiceSequence(hydrated));
+  if (hydrated.shift?.id) {
+    const queueMax = hydrated.bills
+      .filter((bill) => bill.shiftId === hydrated.shift.id)
+      .reduce((max, bill) => Math.max(max, Number(bill.queueNo || 0)), Number(hydrated.shift.queueCounter || 0));
+    hydrated.shift = { ...hydrated.shift, queueCounter: queueMax };
+  }
+  return hydrated;
 }
 
 async function ensureDb() {
@@ -561,6 +801,25 @@ async function ensureDb() {
       updated_at timestamptz NOT NULL DEFAULT now()
     )
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS app_bills (
+      id text PRIMARY KEY,
+      workspace_id text NOT NULL REFERENCES account_groups(workspace_id) ON DELETE CASCADE,
+      invoice_sequence integer NOT NULL,
+      invoice_no text NOT NULL,
+      queue_no integer NOT NULL DEFAULT 0,
+      shift_id text NOT NULL DEFAULT '',
+      status text NOT NULL DEFAULT 'paid',
+      bill_hash text NOT NULL DEFAULT '',
+      verify_code text NOT NULL DEFAULT '',
+      data jsonb NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      UNIQUE (workspace_id, invoice_sequence),
+      UNIQUE (workspace_id, invoice_no)
+    )
+  `);
+  await pool.query("CREATE INDEX IF NOT EXISTS app_bills_workspace_shift_idx ON app_bills (workspace_id, shift_id)");
   if (defaultUsers.size >= 2 && defaultUsers.has(bootstrapConfig.adminId) && defaultUsers.has(bootstrapConfig.cashierId)) {
     await pool.query(
       `
@@ -601,6 +860,10 @@ async function ensureDb() {
         );
       }
     }
+  }
+  const statesForBillMigration = await pool.query("SELECT workspace_id, data FROM workspace_states");
+  for (const row of statesForBillMigration.rows) {
+    await upsertBillsFromState(row.workspace_id, row.data || {});
   }
   dbReady = true;
 }
@@ -868,6 +1131,133 @@ app.delete("/api/account-groups/:workspaceId", rateLimit("write", RATE_LIMIT_WRI
   }
 });
 
+app.post("/api/bills", rateLimit("write", RATE_LIMIT_WRITE_MAX), requireAuth, async (req, res, next) => {
+  try {
+    await ensureDb();
+    const draft = req.body?.bill || {};
+    if (!draft || typeof draft !== "object" || Array.isArray(draft)) {
+      res.status(400).json({ error: "Invalid bill payload" });
+      return;
+    }
+    await pool.query("BEGIN");
+    try {
+      const existing = draft.id
+        ? await pool.query("SELECT data FROM app_bills WHERE id = $1 AND workspace_id = $2", [String(draft.id), req.user.workspaceId])
+        : { rows: [] };
+      if (existing.rows.length) {
+        const stateResult = await pool.query("SELECT data, updated_at FROM workspace_states WHERE workspace_id = $1", [req.user.workspaceId]);
+        const data = stateResult.rows.length
+          ? await hydrateStateFromBillTable(req.user.workspaceId, stateResult.rows[0].data || {})
+          : { bills: [existing.rows[0].data] };
+        await pool.query("COMMIT");
+        res.json({
+          ok: true,
+          duplicate: true,
+          bill: existing.rows[0].data,
+          data,
+          updatedAt: stateResult.rows[0]?.updated_at?.toISOString?.() || new Date().toISOString()
+        });
+        return;
+      }
+
+      const stateResult = await pool.query(
+        "SELECT data FROM workspace_states WHERE workspace_id = $1 FOR UPDATE",
+        [req.user.workspaceId]
+      );
+      if (!stateResult.rows.length) {
+        const error = new Error("Open and sync the shift before saving bills online");
+        error.statusCode = 409;
+        throw error;
+      }
+      let data = await hydrateStateFromBillTable(req.user.workspaceId, stateResult.rows[0].data || {});
+      if (!data.shift?.isOpen || !data.shift?.id) {
+        const error = new Error("Shift is not open");
+        error.statusCode = 409;
+        throw error;
+      }
+
+      const maxBillResult = await pool.query(
+        "SELECT MAX(invoice_sequence) AS max_sequence FROM app_bills WHERE workspace_id = $1",
+        [req.user.workspaceId]
+      );
+      const invoiceSequence = Math.max(
+        maxInvoiceSequence(data),
+        Number(maxBillResult.rows[0]?.max_sequence || 0)
+      ) + 1;
+      const queueNo = Number(data.shift.queueCounter || 0) + 1;
+      const previousBill = (data.bills || [])
+        .slice()
+        .sort((left, right) => Number(right.invoiceSequence || 0) - Number(left.invoiceSequence || 0))[0];
+      const bill = buildServerBill(draft, {
+        invoiceSequence,
+        queueNo,
+        shiftId: data.shift.id,
+        previousBillHash: previousBill?.billHash || "",
+        createdBy: req.user.name,
+        createdById: req.user.id
+      });
+
+      data.bills = mergeRecordsById(data.bills || [], [bill])
+        .sort((left, right) => Number(left.invoiceSequence || 0) - Number(right.invoiceSequence || 0));
+      data.invoiceCounter = Math.max(maxInvoiceSequence(data), invoiceSequence);
+      data.shift = { ...data.shift, queueCounter: queueNo };
+      appendSecurityLog(
+        data,
+        req,
+        "Luu bill server",
+        `${bill.staffName} lam ${bill.items.length} dich vu, tong ${bill.total}, STT #${bill.queueNo}`,
+        bill
+      );
+
+      await pool.query(
+        `
+          INSERT INTO app_bills (
+            id, workspace_id, invoice_sequence, invoice_no, queue_no, shift_id,
+            status, bill_hash, verify_code, data, created_at, updated_at
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11::timestamptz, now())
+        `,
+        [
+          bill.id,
+          req.user.workspaceId,
+          bill.invoiceSequence,
+          bill.invoiceNo,
+          bill.queueNo,
+          bill.shiftId,
+          bill.status,
+          bill.billHash,
+          bill.verifyCode,
+          JSON.stringify(bill),
+          bill.createdAt
+        ]
+      );
+      const updateResult = await pool.query(
+        `
+          INSERT INTO workspace_states (workspace_id, data, updated_at)
+          VALUES ($1, $2::jsonb, now())
+          ON CONFLICT (workspace_id)
+          DO UPDATE SET data = EXCLUDED.data, updated_at = now()
+          RETURNING updated_at
+        `,
+        [req.user.workspaceId, JSON.stringify(data)]
+      );
+      await pool.query("COMMIT");
+      res.set("Cache-Control", "no-store");
+      res.status(201).json({
+        ok: true,
+        bill,
+        data,
+        updatedAt: updateResult.rows[0].updated_at.toISOString()
+      });
+    } catch (error) {
+      await pool.query("ROLLBACK");
+      throw error;
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get("/api/state", requireAuth, async (req, res, next) => {
   try {
     await ensureDb();
@@ -877,8 +1267,9 @@ app.get("/api/state", requireAuth, async (req, res, next) => {
       res.json({ data: null, updatedAt: null });
       return;
     }
+    const data = await hydrateStateFromBillTable(req.user.workspaceId, result.rows[0].data);
     res.json({
-      data: result.rows[0].data,
+      data,
       updatedAt: result.rows[0].updated_at.toISOString()
     });
   } catch (error) {
@@ -895,10 +1286,17 @@ app.post("/api/state", rateLimit("write", RATE_LIMIT_WRITE_MAX), requireAuth, as
       return;
     }
     const previousResult = await pool.query("SELECT data FROM workspace_states WHERE workspace_id = $1", [req.user.workspaceId]);
-    const previous = previousResult.rows[0]?.data || null;
+    const previous = previousResult.rows[0]?.data
+      ? await hydrateStateFromBillTable(req.user.workspaceId, previousResult.rows[0].data)
+      : null;
     if (!["admin", "manager"].includes(req.user.role)) {
       requireCashierSafeUpdate(previous, data, req);
     }
+    const mergedData = await hydrateStateFromBillTable(
+      req.user.workspaceId,
+      mergeWorkspaceState(previous, data)
+    );
+    await upsertBillsFromState(req.user.workspaceId, mergedData);
     const result = await pool.query(
       `
         INSERT INTO workspace_states (workspace_id, data, updated_at)
@@ -907,7 +1305,7 @@ app.post("/api/state", rateLimit("write", RATE_LIMIT_WRITE_MAX), requireAuth, as
         DO UPDATE SET data = EXCLUDED.data, updated_at = now()
         RETURNING updated_at
       `,
-      [req.user.workspaceId, JSON.stringify(data)]
+      [req.user.workspaceId, JSON.stringify(mergedData)]
     );
     res.set("Cache-Control", "no-store");
     res.json({ ok: true, updatedAt: result.rows[0].updated_at.toISOString() });
@@ -916,21 +1314,38 @@ app.post("/api/state", rateLimit("write", RATE_LIMIT_WRITE_MAX), requireAuth, as
   }
 });
 
-app.use(express.static(outputsDir, {
+function setStaticCacheHeaders(res, filePath) {
+  if (filePath.endsWith("index.html") || filePath.endsWith("sw.js")) {
+    res.setHeader("Cache-Control", "no-store");
+  } else {
+    res.setHeader("Cache-Control", "public, max-age=3600");
+  }
+}
+
+app.get("/pos", (req, res) => {
+  res.redirect(302, "/pos/");
+});
+
+app.use("/pos", express.static(outputsDir, {
   dotfiles: "ignore",
   etag: true,
   maxAge: "1h",
-  setHeaders(res, filePath) {
-    if (filePath.endsWith("index.html") || filePath.endsWith("sw.js")) {
-      res.setHeader("Cache-Control", "no-store");
-    } else {
-      res.setHeader("Cache-Control", "public, max-age=3600");
-    }
-  }
+  setHeaders: setStaticCacheHeaders
+}));
+
+app.get("/pos/*", (req, res) => {
+  res.sendFile(path.join(outputsDir, "index.html"));
+});
+
+app.use(express.static(publicDir, {
+  dotfiles: "ignore",
+  etag: true,
+  maxAge: "1h",
+  setHeaders: setStaticCacheHeaders
 }));
 
 app.get("*", (req, res) => {
-  res.sendFile(path.join(outputsDir, "index.html"));
+  res.sendFile(path.join(publicDir, "index.html"));
 });
 
 app.use((error, req, res, next) => {

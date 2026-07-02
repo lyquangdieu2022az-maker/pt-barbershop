@@ -45,6 +45,12 @@ Cau hinh da chuan bi san:
 Sau khi deploy xong, Render se cap link dang:
 https://pt-barbershop-pos.onrender.com
 
+Cach mo sau khi len hosting:
+- https://pt-barbershop-pos.onrender.com/ la web gioi thieu thuong hieu cho khach xem.
+- https://pt-barbershop-pos.onrender.com/pos/ la app order/POS noi bo.
+- Khi gan ten mien rieng, https://ptbarbershop.site/ la web gioi thieu, https://ptbarbershop.site/pos/ la app order/POS.
+- Chi nhanh chinh mac dinh: Xa Hau Nghia, Tay Ninh.
+
 Ten mien:
 - Link dang *.onrender.com la mien phi.
 - Neu muon ten mien rieng dep nhu ptbarbershop.com hoac ptbarbershop.vn thi thuong phai mua ten mien.
@@ -55,6 +61,11 @@ Bao mat / chong spam:
 - Server co rate limit cho toan trang, API, dang nhap va thao tac ghi du lieu.
 - Neu spam qua gioi han nhieu lan, IP bi khoa tam.
 - Lop nay giup chan spam/API abuse. Neu bi DDoS lon, nen dung them Cloudflare/Firewall phia truoc domain.
+
+Nang cap dong nguoi dung:
+- Bill online duoc luu vao bang app_bills rieng trong Postgres.
+- Server tu cap So HD/STT bang transaction, nen nhieu may bam In bill cung luc van khong trung so.
+- Khi dong bo state, server se merge va giu bill da luu, tranh may cu ghi de mat hoa don cua may khac.
 
 Neu ban deploy bang Static Site hoac Netlify:
 - Web van mo duoc.

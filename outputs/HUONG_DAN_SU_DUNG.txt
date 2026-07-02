@@ -77,6 +77,8 @@ HUONG DAN SU DUNG PT BARBERSHOP POS
 10. So hoa don va so thu tu
 - Moi bill da luu se co So HD dang HD000001, HD000002...
 - STT cho la so thu tu khach doi cat trong ca hien tai.
+- Neu chay ban Render + Postgres, So HD va STT do server cap bang transaction. Nhieu may bam In bill cung luc van khong trung so.
+- Hoa don online duoc luu rieng trong bang app_bills cua Postgres, server se giu bill da luu va tranh viec may chua cap nhat ghi de mat hoa don.
 - Khi tao bill co the nhap ten khach, so dien thoai, nhan vien, ghi chu va phuong thuc thanh toan.
 - O Lich su bill co the tim bang So HD, STT, ten khach, so dien thoai, nhan vien hoac phuong thuc thanh toan.
 

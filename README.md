@@ -2,6 +2,13 @@
 
 Bo web order/barbershop POS cho PT Barbershop.
 
+## Website public va app POS
+
+- Ten mien goc, vi du `https://ptbarbershop.site`, se mo web gioi thieu thuong hieu cho khach xem.
+- Duong dan `/pos/`, vi du `https://ptbarbershop.site/pos/`, se mo app order/POS noi bo cho Thu Ngan, Quan Ly va Admin.
+- API dong bo online van dung chung server, nen may tinh/iPhone dang nhap POS se cap nhat cung du lieu khi Render + Postgres hoat dong.
+- Chi nhanh chinh mac dinh: Xa Hau Nghia, Tay Ninh. Quan Ly co the doi dia chi rieng cho tung chi nhanh trong phan thong tin in bill.
+
 ## Tai khoan
 
 - Khong ghi ID/mat khau that trong GitHub.
@@ -91,6 +98,8 @@ Neu dau trang hien `Dong bo: Luu tren may nay`, backend/database chua ket noi ne
 
 - Moi bill da luu co So HD, vi du `HD000001`.
 - STT cho la so thu tu khach doi cat trong ca hien tai.
+- Khi dung Render Web Service + Postgres, bill moi duoc luu vao bang `app_bills` rieng trong Postgres. Server tu cap So HD/STT bang transaction, nen nhieu may bam In bill cung luc van khong trung so.
+- Neu mot may chua kip cap nhat bill cua may khac, server van giu bill da luu va khong de state cu ghi de mat hoa don.
 - Co the nhap so dien thoai khach va phuong thuc thanh toan khi tao bill.
 - Lich su bill co o tim So HD, STT, ten khach, so dien thoai, nhan vien hoac phuong thuc thanh toan.
 - Thu Ngan huy bill chi can nhap ly do. He thong gui yeu cau den Quan Li/Admin de duyet hoac tu choi tren tai khoan dang nhap cua ho.
@@ -153,6 +162,7 @@ Neu dau trang hien `Dong bo: Luu tren may nay`, backend/database chua ket noi ne
 - Password trong Postgres duoc bam scrypt; API khong tra password ve trinh duyet va man hinh Tai khoan khong hien password.
 - Dang nhap online dung phien HttpOnly ky so; dong bo bill khong gui lai mat khau.
 - Tai khoan goc lay tu bien moi truong rieng tu cua Render, khong hard-code trong GitHub.
+- Bill online co API rieng `/api/bills`, luu tung hoa don thanh ban ghi rieng trong Postgres va khoa So HD/STT bang transaction.
 - Co gioi han dang nhap sai, gioi han request API, gioi han request ghi du lieu, khoa tam IP spam, Content Security Policy, cac security header trinh duyet va kiem soat quyen tren server.
 - Neu bi DDoS lon, nen dat domain qua Cloudflare de co lop loc traffic phia truoc Render. Lop trong app giup chan spam/API abuse, con DDoS mang lon can firewall/CDN phia truoc.
 - Ban mo truc tiep/offline van huu ich de du phong, nhung khong the an toan bang Render Web Service + Postgres vi khong co server de xac thuc va chong sua du lieu.

@@ -6,6 +6,7 @@ const SYNC_INTERVAL_MS = 2500;
 const ACCOUNT_SYNC_INTERVAL_MS = 3500;
 const API_BASE_URL = String(window.PT_API_BASE_URL || "").replace(/\/+$/, "");
 const DEFAULT_WORKSPACE_ID = "pt-main";
+const DEFAULT_SHOP_ADDRESS = "Xã Hậu Nghĩa, Tây Ninh";
 
 const defaultAccountState = {
   groups: [],
@@ -53,7 +54,7 @@ const defaultState = {
   selectedServiceIds: [],
   shopInfo: {
     receiptName: "PT Barbershop",
-    address: "",
+    address: DEFAULT_SHOP_ADDRESS,
     phone: "",
     receiptWidth: "58mm"
   },
@@ -90,6 +91,7 @@ let accountSyncStatus = "Chưa kiểm tra";
 let toastTimer = null;
 let deferredInstallPrompt = null;
 let pendingShiftExcel = null;
+let billSaveInFlight = false;
 
 const $ = (selector) => document.querySelector(selector);
 const money = (value) => new Intl.NumberFormat("vi-VN").format(Number(value || 0)) + " VND";
@@ -798,6 +800,22 @@ async function deleteCloudAccountGroup(workspaceId) {
   if (!response.ok) {
     const errorPayload = await response.json().catch(() => ({}));
     const error = new Error(errorPayload.error || "Không xóa được tài khoản online.");
+    error.status = response.status;
+    throw error;
+  }
+  return response.json();
+}
+
+async function createCloudBill(draft) {
+  const response = await fetch(apiUrl("/api/bills"), {
+    method: "POST",
+    headers: syncHeaders(),
+    credentials: "include",
+    body: JSON.stringify({ bill: draft })
+  });
+  if (!response.ok) {
+    const errorPayload = await response.json().catch(() => ({}));
+    const error = new Error(errorPayload.error || "Không lưu được bill trên server.");
     error.status = response.status;
     throw error;
   }
@@ -2591,8 +2609,7 @@ function clearSelectedServices() {
   showToast("Đã xóa dịch vụ đang chọn.");
 }
 
-function saveBill(options = {}) {
-  const shouldPrint = options?.print === true;
+function buildBillDraftFromForm() {
   const staff = staffById($("#orderStaff").value);
   state.selectedServiceIds = selectedServiceIds();
   const services = selectedServices();
@@ -2611,16 +2628,8 @@ function saveBill(options = {}) {
   }
 
   const { total, commission } = billTotals(services);
-  const invoiceSequence = nextInvoiceSequence();
-  const queueNo = nextQueueNumber();
-  const previousBill = state.bills.slice().sort((left, right) => Number(right.invoiceSequence || 0) - Number(left.invoiceSequence || 0))[0];
-  const previousBillHash = previousBill?.billHash || "";
-  const bill = {
+  return {
     id: crypto.randomUUID(),
-    createdAt: new Date().toISOString(),
-    invoiceSequence,
-    invoiceNo: formatInvoiceNo(invoiceSequence),
-    queueNo,
     customer: $("#customerName").value.trim() || "Khách lẻ",
     phone: $("#customerPhone").value.trim(),
     staffId: staff.id,
@@ -2628,11 +2637,6 @@ function saveBill(options = {}) {
     note: $("#orderNote").value.trim(),
     paymentMethod: safePaymentMethod($("#paymentMethod").value),
     shiftId: state.shift.id,
-    createdBy: state.session.name,
-    status: "paid",
-    canceledAt: "",
-    canceledBy: "",
-    cancelReason: "",
     items: services.map((service) => ({
       id: service.id,
       category: service.category,
@@ -2641,7 +2645,37 @@ function saveBill(options = {}) {
       commission: Number(service.commission || 0)
     })),
     total,
-    commission,
+    commission
+  };
+}
+
+function saveLocalBillDraft(draft, options = {}) {
+  const shouldPrint = options?.print === true;
+  const invoiceSequence = nextInvoiceSequence();
+  const queueNo = nextQueueNumber();
+  const previousBill = state.bills.slice().sort((left, right) => Number(right.invoiceSequence || 0) - Number(left.invoiceSequence || 0))[0];
+  const previousBillHash = previousBill?.billHash || "";
+  const bill = {
+    id: draft.id || crypto.randomUUID(),
+    createdAt: new Date().toISOString(),
+    invoiceSequence,
+    invoiceNo: formatInvoiceNo(invoiceSequence),
+    queueNo,
+    customer: draft.customer || "Khách lẻ",
+    phone: draft.phone || "",
+    staffId: draft.staffId || "",
+    staffName: draft.staffName || "-",
+    note: draft.note || "",
+    paymentMethod: safePaymentMethod(draft.paymentMethod),
+    shiftId: state.shift.id,
+    createdBy: state.session.name,
+    status: "paid",
+    canceledAt: "",
+    canceledBy: "",
+    cancelReason: "",
+    items: draft.items || [],
+    total: Number(draft.total || 0),
+    commission: Number(draft.commission || 0),
     previousBillHash,
     billHash: "",
     verifyCode: ""
@@ -2657,6 +2691,45 @@ function saveBill(options = {}) {
   resetOrder();
   showToast(`${shouldPrint ? "Đã lưu và in" : "Đã lưu"} ${bill.invoiceNo} - STT #${bill.queueNo}`);
   return bill;
+}
+
+async function saveBill(options = {}) {
+  const shouldPrint = options?.print === true;
+  const draft = buildBillDraftFromForm();
+  if (!draft) return null;
+
+  if (syncOnline && !isFileOfflineMode()) {
+    try {
+      let payload = null;
+      try {
+        payload = await createCloudBill(draft);
+      } catch (error) {
+        if (error.status !== 409) throw error;
+        await pushCloudState();
+        payload = await createCloudBill(draft);
+      }
+      if (payload.data) {
+        lastRemoteUpdatedAt = payload.updatedAt || lastRemoteUpdatedAt;
+        applyBusinessState(payload.data);
+      }
+      const bill = payload.bill || state.bills.find((item) => item.id === draft.id);
+      if (!bill) throw new Error("Server chưa trả bill hợp lệ.");
+      setSyncStatus("Online", true);
+      resetOrder();
+      showToast(`${shouldPrint ? "Đã lưu server và in" : "Đã lưu server"} ${bill.invoiceNo} - STT #${bill.queueNo}`);
+      return bill;
+    } catch (error) {
+      const canFallback = isFileOfflineMode() || window.navigator.onLine === false || error.status >= 500 || !error.status;
+      if (!canFallback) {
+        showToast(error.message || "Server từ chối lưu bill.", "danger");
+        return null;
+      }
+      setSyncStatus("Lưu trên máy này", false);
+      showToast("Mất kết nối server, bill lưu tạm trên máy này.", "danger");
+    }
+  }
+
+  return saveLocalBillDraft(draft, options);
 }
 
 function finalizeBillCancellation(bill, reason, request = null) {
@@ -2798,9 +2871,21 @@ function rejectCancelRequest(requestId) {
   showToast(`Đã từ chối yêu cầu hủy ${request.invoiceNo || "bill"}`);
 }
 
-function printPaymentBill() {
-  const bill = saveBill({ print: true });
-  if (bill) printBill(bill);
+async function printPaymentBill() {
+  if (billSaveInFlight) {
+    showToast("Bill đang được lưu, chờ một chút.", "danger");
+    return;
+  }
+  billSaveInFlight = true;
+  const button = $("#saveBillBtn");
+  if (button) button.disabled = true;
+  try {
+    const bill = await saveBill({ print: true });
+    if (bill) printBill(bill);
+  } finally {
+    billSaveInFlight = false;
+    if (button) button.disabled = false;
+  }
 }
 
 function printSavedBill(billId) {
