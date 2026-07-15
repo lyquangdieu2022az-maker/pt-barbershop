@@ -47,6 +47,8 @@ Huong dan chi tiet nam trong file `HUONG_DAN_CHUYEN_DATABASE_NEON_FREE.txt`.
 
 Sau khi deploy, mo `/health/db`. Neu hien `{"ok":true,"database":"connected"}` la Neon da ket noi.
 
+Neu dang nhap Admin bao sai ID/mat khau, mo `/health/auth`. Neu `adminId` va `adminPassword` la `true` thi bien Admin tren Render da hop le; endpoint nay khong hien mat khau.
+
 ## Cai thanh app tren iPhone/Android
 
 Ban web nay da duoc cau hinh nhu app PWA:

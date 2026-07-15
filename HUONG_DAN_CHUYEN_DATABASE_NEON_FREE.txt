@@ -52,8 +52,12 @@ BUOC 3 - DEPLOY LAI:
    https://ten-mien-cua-anh/health/db
    Neu hien {"ok":true,"database":"connected"} la database Neon da ket noi.
 6. Mo:
+   https://ten-mien-cua-anh/health/auth
+   Neu cac dong adminId/adminPassword la true thi tai khoan Admin goc da du dieu kien tao.
+   Endpoint nay khong hien mat khau, chi hien dung/sai cau hinh.
+7. Mo:
    https://ten-mien-cua-anh/pos/
-7. Dang nhap Admin.
+8. Dang nhap Admin.
 
 BUOC 4 - KIEM TRA DONG BO:
 1. Dang nhap Admin tren may tinh.
@@ -73,6 +77,23 @@ NEU WEBSITE VAN HIEN DU LIEU CU HOAC LOI:
 2. Refresh lai trang /pos/.
 3. Neu tren dien thoai la PWA, dong app hoan toan roi mo lai.
 4. Neu van loi, vao Render Logs xem co dong nao lien quan DATABASE_URL hoac password Neon khong.
+
+NEU DANG NHAP ADMIN BAO SAI ID HOAC MAT KHAU:
+1. Vao Render -> Web Service -> Environment.
+2. Kiem tra ten bien phai viet dung tuyet doi:
+   PT_ADMIN_ID
+   PT_ADMIN_PASSWORD
+   PT_CASHIER_ID
+   PT_CASHIER_PASSWORD
+   DATABASE_URL
+3. Khong them dau cach truoc/sau gia tri.
+4. Neu mat khau co so 0 dau tien thi phai giu nguyen, khong duoc bo so 0.
+5. Save Changes xong phai Manual Deploy lai.
+6. Mo /health/auth de xem:
+   adminId: true
+   adminPassword: true
+   bootstrapUsers: lon hon 0
+7. Neu /health/auth van false thi Render dang nhap sai ten bien hoac chua restart/deploy lai.
 
 LUU Y BAO MAT:
 - Khong chup, khong gui public connection string DATABASE_URL.

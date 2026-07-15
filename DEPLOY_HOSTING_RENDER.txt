@@ -55,6 +55,7 @@ Cach mo sau khi len hosting:
 - https://pt-barbershop-pos.onrender.com/ la web gioi thieu thuong hieu cho khach xem.
 - https://pt-barbershop-pos.onrender.com/pos/ la app order/POS noi bo.
 - https://pt-barbershop-pos.onrender.com/health/db dung de kiem tra Neon da ket noi chua.
+- https://pt-barbershop-pos.onrender.com/health/auth dung de kiem tra bien Admin/Thu Ngan da hop le chua, khong lo mat khau.
 - Khi gan ten mien rieng, https://ptbarbershop.site/ la web gioi thieu, https://ptbarbershop.site/pos/ la app order/POS.
 - Chi nhanh chinh mac dinh: Xa Hau Nghia, Tay Ninh.
 

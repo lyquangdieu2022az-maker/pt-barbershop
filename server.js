@@ -820,7 +820,9 @@ async function ensureDb() {
     )
   `);
   await pool.query("CREATE INDEX IF NOT EXISTS app_bills_workspace_shift_idx ON app_bills (workspace_id, shift_id)");
-  if (defaultUsers.size >= 2 && defaultUsers.has(bootstrapConfig.adminId) && defaultUsers.has(bootstrapConfig.cashierId)) {
+  if (defaultUsers.size) {
+    const managerId = defaultUsers.has(bootstrapConfig.adminId) ? bootstrapConfig.adminId : "";
+    const cashierId = defaultUsers.has(bootstrapConfig.cashierId) ? bootstrapConfig.cashierId : "";
     await pool.query(
       `
         INSERT INTO account_groups (workspace_id, workspace_name, manager_id, cashier_id, created_by)
@@ -828,7 +830,7 @@ async function ensureDb() {
         ON CONFLICT (workspace_id)
         DO UPDATE SET manager_id = EXCLUDED.manager_id, cashier_id = EXCLUDED.cashier_id
       `,
-      [DEFAULT_WORKSPACE_ID, bootstrapConfig.adminId, bootstrapConfig.cashierId]
+      [DEFAULT_WORKSPACE_ID, managerId, cashierId]
     );
     for (const [id, user] of defaultUsers.entries()) {
       await pool.query(
@@ -842,11 +844,11 @@ async function ensureDb() {
             role = EXCLUDED.role,
             name = EXCLUDED.name,
             workspace_id = EXCLUDED.workspace_id,
-            workspace_name = EXCLUDED.workspace_name
-        `,
-        [id, passwordHash(user.password), user.role, user.name, user.workspaceId, user.workspaceName]
-      );
-    }
+          workspace_name = EXCLUDED.workspace_name
+      `,
+      [id, passwordHash(user.password), user.role, user.name, user.workspaceId, user.workspaceName]
+    );
+  }
   }
   const legacyTable = await pool.query("SELECT to_regclass('public.app_state') AS table_name");
   if (legacyTable.rows[0]?.table_name) {
@@ -882,6 +884,26 @@ app.get("/health/db", async (req, res) => {
     res.json({ ok: true, database: "connected" });
   } catch {
     res.status(503).json({ ok: false, database: "connection_failed" });
+  }
+});
+
+app.get("/health/auth", async (req, res) => {
+  const status = {
+    adminId: isValidAccountId(bootstrapConfig.adminId),
+    adminPassword: isValidPassword(bootstrapConfig.adminPassword),
+    cashierId: isValidAccountId(bootstrapConfig.cashierId),
+    cashierPassword: isValidPassword(bootstrapConfig.cashierPassword),
+    bootstrapUsers: defaultUsers.size
+  };
+  if (!pool) {
+    res.status(503).json({ ok: false, database: "missing_DATABASE_URL", bootstrap: status });
+    return;
+  }
+  try {
+    await ensureDb();
+    res.json({ ok: true, database: "connected", bootstrap: status });
+  } catch {
+    res.status(503).json({ ok: false, database: "connection_failed", bootstrap: status });
   }
 });
 
