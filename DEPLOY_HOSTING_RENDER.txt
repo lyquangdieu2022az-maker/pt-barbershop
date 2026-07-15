@@ -1,9 +1,10 @@
 HUONG DAN DUA PT BARBERSHOP POS LEN RENDER CO DONG BO ONLINE
 
 Ban moi co server/database de may tinh va iPhone dung chung du lieu.
+Ban nay da chuan bi san kieu Render Web Service + Neon Postgres Free.
 
 Luu y quan trong:
-- Muon dong bo that thi phai deploy bang Render Blueprint de tao Web Service + Postgres.
+- Muon dong bo that thi phai deploy bang Render Web Service va gan DATABASE_URL cua Neon Postgres.
 - Khong chon Static Site cho ban dong bo online.
 - Khi deploy dung, may tinh tao bill thi iPhone se thay, iPhone huy bill thi may tinh se cap nhat.
 - Neu database bi tat/chua cau hinh, bill co the luu tam tren may do va hien trang thai "Luu tren may nay".
@@ -23,24 +24,29 @@ Tai khoan dang nhap trong web:
   PT_CASHIER_PASSWORD
 - Dat 4 bien nay trong Render Environment truoc khi giao khach.
 
-Cach dua len Render dung cach:
-1. Tao tai khoan hoac dang nhap Render: https://dashboard.render.com/
-2. Dua thu muc du an nay len GitHub/GitLab/Bitbucket.
-3. Trong Render, chon New + -> Blueprint.
-4. Chon repo vua day len.
-5. Render se doc file render.yaml trong thu muc goc.
-6. Render se tao 2 thu:
-   - Web Service: pt-barbershop-pos
-   - Postgres database: pt-barbershop-db
-7. Bam Apply de deploy.
-8. Vao Environment cua Web Service va kiem tra 4 bien PT_ADMIN_ID, PT_ADMIN_PASSWORD, PT_CASHIER_ID, PT_CASHIER_PASSWORD da co gia tri rieng tu.
+Cach dua len Render dung cach voi Neon Free:
+1. Tao database Neon Free truoc tai https://neon.tech/
+2. Copy PostgreSQL connection string cua Neon, dang:
+   postgresql://user:password@host.neon.tech/dbname?sslmode=require
+3. Tao tai khoan hoac dang nhap Render: https://dashboard.render.com/
+4. Dua thu muc du an nay len GitHub/GitLab/Bitbucket.
+5. Trong Render, chon New + -> Blueprint.
+6. Chon repo vua day len.
+7. Render se doc file render.yaml trong thu muc goc.
+8. Render se tao Web Service: pt-barbershop-pos
+9. Khi Render hoi Environment Variables, dan connection string Neon vao DATABASE_URL.
+10. Nhap 4 bien tai khoan rieng tu: PT_ADMIN_ID, PT_ADMIN_PASSWORD, PT_CASHIER_ID, PT_CASHIER_PASSWORD.
+11. Bam Apply/Deploy.
 
 Cau hinh da chuan bi san:
 - Service name: pt-barbershop-pos
 - Runtime: node
 - Build command: npm install
 - Start command: npm start
-- Database: pt-barbershop-db
+- Database: Neon Postgres qua bien DATABASE_URL
+
+File huong dan chi tiet:
+- HUONG_DAN_CHUYEN_DATABASE_NEON_FREE.txt
 
 Sau khi deploy xong, Render se cap link dang:
 https://pt-barbershop-pos.onrender.com
@@ -48,6 +54,7 @@ https://pt-barbershop-pos.onrender.com
 Cach mo sau khi len hosting:
 - https://pt-barbershop-pos.onrender.com/ la web gioi thieu thuong hieu cho khach xem.
 - https://pt-barbershop-pos.onrender.com/pos/ la app order/POS noi bo.
+- https://pt-barbershop-pos.onrender.com/health/db dung de kiem tra Neon da ket noi chua.
 - Khi gan ten mien rieng, https://ptbarbershop.site/ la web gioi thieu, https://ptbarbershop.site/pos/ la app order/POS.
 - Chi nhanh chinh mac dinh: Xa Hau Nghia, Tay Ninh.
 

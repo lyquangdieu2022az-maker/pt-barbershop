@@ -872,6 +872,19 @@ app.get("/health", (req, res) => {
   res.json({ ok: true });
 });
 
+app.get("/health/db", async (req, res) => {
+  if (!pool) {
+    res.status(503).json({ ok: false, database: "missing_DATABASE_URL" });
+    return;
+  }
+  try {
+    await pool.query("SELECT 1");
+    res.json({ ok: true, database: "connected" });
+  } catch {
+    res.status(503).json({ ok: false, database: "connection_failed" });
+  }
+});
+
 app.post("/api/login", rateLimit("login", RATE_LIMIT_LOGIN_MAX), async (req, res, next) => {
   try {
     const id = String(req.body?.id || "");
@@ -1339,6 +1352,10 @@ app.use("/pos", express.static(outputsDir, {
 
 app.get("/pos/*", (req, res) => {
   res.sendFile(path.join(outputsDir, "index.html"));
+});
+
+app.get(["/privacy", "/privacy-policy"], (req, res) => {
+  res.sendFile(path.join(publicDir, "privacy.html"));
 });
 
 app.use(express.static(publicDir, {

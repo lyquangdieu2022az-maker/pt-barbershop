@@ -1,0 +1,86 @@
+HUONG DAN CHUYEN DATABASE PT BARBERSHOP SANG NEON FREE
+
+Muc tieu:
+- Web/POS van chay tren Render Web Service.
+- Database khong dung Render Postgres Free nua vi Render Free Postgres co han dung thu.
+- Database chuyen sang Neon Postgres Free de may tinh/iPhone dung chung du lieu online.
+
+QUAN TRONG VE DU LIEU CU:
+- Neu database Render da het han va anh can giu bill/tai khoan/chi nhanh cu:
+  1. Phai nang cap database Render tam thoi len goi tra phi.
+  2. Sau khi database mo lai, xuat backup.
+  3. Nhap backup qua Neon.
+  4. Sau do moi co the cat sang Neon.
+- Neu khong can du lieu cu:
+  Tao Neon moi va gan vao Render. He thong se bat dau database moi, sach, rong.
+
+BUOC 1 - TAO DATABASE NEON FREE:
+1. Vao https://neon.tech/
+2. Dang nhap bang Google hoac GitHub.
+3. Tao Project moi.
+4. Dat ten project: pt-barbershop
+5. Chon region gan Viet Nam nhat neu co, vi du Singapore/Asia. Neu khong co thi chon region mac dinh.
+6. Tao xong, vao muc Connect.
+7. Copy connection string dang PostgreSQL. No thuong co dang:
+   postgresql://user:password@host.neon.tech/dbname?sslmode=require
+
+BUOC 2 - DOI DATABASE_URL TREN RENDER:
+1. Vao https://dashboard.render.com/
+2. Mo Web Service dang chay, vi du pt-barbershop-pos.
+3. Vao Environment.
+4. Tim bien DATABASE_URL.
+5. Dan connection string Neon vua copy vao DATABASE_URL.
+6. Neu chua co thi bam Add Environment Variable:
+   Name: DATABASE_URL
+   Value: connection string Neon
+7. Kiem tra cac bien nay van co gia tri rieng tu:
+   PT_ADMIN_ID
+   PT_ADMIN_PASSWORD
+   PT_CASHIER_ID
+   PT_CASHIER_PASSWORD
+   SESSION_SECRET
+8. Bam Save Changes.
+
+BUOC 3 - DEPLOY LAI:
+1. Vao tab Manual Deploy.
+2. Bam Deploy latest commit.
+3. Doi Render build xong.
+4. Mo:
+   https://ten-mien-cua-anh/health
+   Neu hien {"ok":true} la server song.
+5. Mo:
+   https://ten-mien-cua-anh/health/db
+   Neu hien {"ok":true,"database":"connected"} la database Neon da ket noi.
+6. Mo:
+   https://ten-mien-cua-anh/pos/
+7. Dang nhap Admin.
+
+BUOC 4 - KIEM TRA DONG BO:
+1. Dang nhap Admin tren may tinh.
+2. Tao 1 chi nhanh/tai khoan thu.
+3. Dang nhap tren iPhone bang tai khoan do.
+4. Neu iPhone thay chi nhanh/tai khoan vua tao thi database online da dung.
+5. Tao 1 bill test tren may tinh, iPhone phai thay lich su bill sau vai giay.
+
+NEU RENDER KHONG CHO SUA DATABASE_URL:
+- Co the service cu van bi Blueprint quan ly bang Render database.
+- Day bo code moi nay len GitHub truoc.
+- Trong Render, vao Blueprint/Service va deploy lai de Render doc render.yaml moi.
+- File render.yaml moi da doi DATABASE_URL thanh sync:false, nghia la anh duoc tu dan chuoi Neon.
+
+NEU WEBSITE VAN HIEN DU LIEU CU HOAC LOI:
+1. Doi 1-2 phut cho Render khoi dong lai.
+2. Refresh lai trang /pos/.
+3. Neu tren dien thoai la PWA, dong app hoan toan roi mo lai.
+4. Neu van loi, vao Render Logs xem co dong nao lien quan DATABASE_URL hoac password Neon khong.
+
+LUU Y BAO MAT:
+- Khong chup, khong gui public connection string DATABASE_URL.
+- Khong dua DATABASE_URL vao GitHub.
+- Khong ghi ID/mat khau that vao README.
+- Neu lo connection string, vao Neon reset password/database role roi dan chuoi moi vao Render.
+
+OPTION NEU CAN GIU DU LIEU CU:
+- Render Free Postgres het han thi khong doc duoc du lieu bang goi free.
+- Muon lay lai du lieu cu thi can nang cap Render database tam thoi, xuat backup SQL, roi import sang Neon.
+- Neu khong nang cap trong thoi gian grace period cua Render, du lieu co the bi xoa vinh vien.
